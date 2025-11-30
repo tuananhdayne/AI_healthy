@@ -1,0 +1,107 @@
+// ============================================
+// FIRESTORE SECURITY RULES
+// ============================================
+// Đây là các rules bảo mật được khuyến nghị cho collection userCredentials
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========== userCredentials Collection ==========
+    match /userCredentials/{document=**} {
+      // Chỉ cho phép đọc/ghi dữ liệu của chính mình
+      allow read: if request.auth.uid == resource.data.uid;
+      allow write: if request.auth.uid == resource.data.uid;
+      
+      // Chỉ cho phép tạo mới bởi anonymous (cho đăng ký)
+      allow create: if true;  // Cần xác thực tốt hơn
+      
+      // Không cho phép xóa
+      allow delete: if false;
+    }
+
+    // ========== users Collection (Profiles) ==========
+    match /users/{userId} {
+      // Mỗi người có thể đọc/cập nhật profile của chính mình
+      allow read, write: if request.auth.uid == userId;
+      
+      // Admin có thể đọc tất cả
+      // allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ========== messages Collection (Chat) ==========
+    match /messages/{message} {
+      // Người dùng có thể tạo message mới
+      allow create: if request.auth.uid != null;
+      
+      // Chỉ người gửi có thể xóa
+      allow delete: if request.auth.uid == resource.data.userId;
+      
+      // Mọi người đã đăng nhập có thể đọc
+      allow read: if request.auth.uid != null;
+    }
+
+    // ========== settings Collection ==========
+    match /settings/{setting} {
+      // Mỗi người chỉ có thể xem/chỉnh cài đặt của chính mình
+      allow read, write: if request.auth.uid == resource.data.userId;
+      
+      // Cho phép tạo cài đặt mới
+      allow create: if request.auth.uid != null;
+    }
+
+    // ========== Admin Collection (nếu có) ==========
+    match /admin/{document=**} {
+      // Chỉ admin có thể truy cập
+      // allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read, write: if false;  // Tạm dừng cho đến khi có authentication
+    }
+  }
+}
+
+// ============================================
+// HƯỚNG DẪN THIẾT LẬP
+// ============================================
+
+/*
+
+1. Truy cập Firebase Console:
+   - Vào https://console.firebase.google.com
+   - Chọn project "giadienweb"
+   - Chọn "Firestore Database"
+   - Chọn tab "Rules"
+
+2. Thay thế rules cũ bằng rules mới trên
+
+3. Click "Publish" để cập nhật
+
+4. Kiểm tra rules hoạt động:
+   - Vào tab "Rules Playground"
+   - Chọn request: "Create"
+   - Collection: "userCredentials"
+   - Auth: "Authenticated"
+   - UID: "user123"
+
+5. Test cấu hình:
+   - Thử đăng ký tài khoản mới
+   - Kiểm tra document được tạo trong Firestore
+   - Thử đăng nhập
+
+*/
+
+// ============================================
+// NOTES - GHI CHÚ
+// ============================================
+
+/*
+
+⚠️ HIỆN TẠI - DEVELOPMENT MODE
+   - Rules cho phép tạo dữ liệu tự do (allow create: if true)
+   - Để bảo mật, cần thêm Authentication
+
+✅ NÂNG CẤP - PRODUCTION MODE
+   - Bắt buộc phải có Firebase Authentication
+   - Chỉ auth user mới được tạo/cập nhật
+   - Kiểm tra UID trước khi cho phép operation
+
+*/

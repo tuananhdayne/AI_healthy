@@ -1,0 +1,185 @@
+<div class="landing">
+  <section class="hero">
+    <div class="hero-content">
+      <p class="eyebrow">Trợ lý sức khỏe AI thế hệ mới</p>
+      <h1>
+        HealthyAI đồng hành cùng bạn
+        <span>24/7</span>
+      </h1>
+      <p class="subtitle">
+        Theo dõi thói quen, giải đáp thắc mắc tức thì và đưa ra khuyến nghị được kiểm chứng
+        bởi đội ngũ chuyên gia để bạn sống khỏe chủ động mỗi ngày.
+      </p>
+      <div class="hero-cta">
+        <a routerLink="/chat" class="btn primary">Bắt đầu trò chuyện</a>
+        <a routerLink="/register" class="btn ghost">Tạo tài khoản miễn phí</a>
+      </div>
+      <ul class="hero-stats">
+        <li *ngFor="let stat of heroStats">
+          <span class="value">{{ stat.value }}</span>
+          <span class="label">{{ stat.label }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="hero-visual">
+      <div class="ai-card">
+        <div class="pulse"></div>
+        <div class="ai-card-header">
+          <span class="status-dot"></span>
+          HealthyAI đang xử lý thông tin
+        </div>
+        <div class="ai-card-body">
+          <p>"Tôi đang mất ngủ nhiều ngày và khó tập trung"</p>
+          <div class="ai-response">
+            <span>HealthyAI</span>
+            <p>
+              Bạn thử ghi lại thói quen mỗi tối để tìm tác nhân gây mất ngủ nhé. Nếu có cảm giác
+              tim đập nhanh hoặc khó thở, hãy liên hệ bác sĩ ngay lập tức.
+            </p>
+          </div>
+        </div>
+        <div class="ai-card-footer">
+          <span>Đề xuất hành động</span>
+          <div class="actions">
+            <span>Nhật ký giấc ngủ</span>
+            <span>Gặp bác sĩ nếu kéo dài</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust">
+    <p>Được tin tưởng bởi cộng đồng doanh nghiệp và chuyên gia y tế</p>
+    <div class="badge-row">
+      <span>WHO HealthDay 2024</span>
+      <span>Vietnam Digital Health Summit</span>
+      <span>ISO/IEC 27001 Ready</span>
+      <span>Medical Advisor Network</span>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <div class="section-heading">
+      <p class="eyebrow">HealthyAI khác gì?</p>
+      <h2>Tập trung vào trải nghiệm sức khỏe an toàn</h2>
+      <p>Chúng tôi thiết kế HealthyAI để đặt sự an tâm của bạn lên hàng đầu.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature-card" *ngFor="let feature of featureCards">
+        <div class="card-header">
+          <span class="icon">{{ feature.icon }}</span>
+          <span class="tag">{{ feature.tag }}</span>
+        </div>
+        <h3>{{ feature.title }}</h3>
+        <p>{{ feature.description }}</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="about" class="care-focus">
+    <div class="section-heading">
+      <p class="eyebrow">Chăm sóc toàn diện</p>
+      <h2>HealthyAI hiểu bạn ở nhiều khía cạnh</h2>
+      <p>Ghi nhớ bối cảnh dài hạn để đưa ra khuyến nghị sát thực tế.</p>
+    </div>
+    <div class="care-grid">
+      <div class="care-card" *ngFor="let care of careHighlights">
+        <h3>{{ care.title }}</h3>
+        <p>{{ care.caption }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="workflow">
+    <div class="section-heading">
+      <p class="eyebrow">3 bước đơn giản</p>
+      <h2>Bắt đầu hành trình sống khỏe cùng HealthyAI</h2>
+    </div>
+    <div class="workflow-steps">
+      <article class="workflow-step" *ngFor="let step of workflow">
+        <span class="badge">{{ step.badge }}</span>
+        <h3>{{ step.title }}</h3>
+        <p>{{ step.description }}</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="testimonials">
+    <div class="section-heading">
+      <p class="eyebrow">Người dùng nói gì?</p>
+      <h2>Kết quả thực tế từ HealthyAI</h2>
+    </div>
+    <div class="testimonial-grid">
+      <article class="testimonial-card" *ngFor="let testimonial of testimonials">
+        <p class="quote">“{{ testimonial.quote }}”</p>
+        <div class="author">
+          <span class="name">{{ testimonial.author }}</span>
+          <span class="role">{{ testimonial.role }}</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="safety">
+    <div class="section-heading">
+      <p class="eyebrow">Minh bạch & an toàn</p>
+      <h2>HealthyAI không thay thế bác sĩ</h2>
+      <p>
+        Mọi câu trả lời đều đi kèm cảnh báo và nguồn tham khảo. Chúng tôi luôn khuyến nghị bạn gặp
+        chuyên gia khi có dấu hiệu bất thường hoặc tình trạng nghiêm trọng.
+      </p>
+    </div>
+    <ul class="safety-list">
+      <li>✔ Bộ lọc nội dung y tế và cảnh báo khẩn cấp</li>
+      <li>✔ Nhắc nhở gặp bác sĩ khi cần thăm khám trực tiếp</li>
+      <li>✔ Lưu vết hội thoại để bạn chia sẻ lại với chuyên gia</li>
+    </ul>
+  </section>
+
+  <section class="faq">
+    <div class="section-heading">
+      <p class="eyebrow">FAQ</p>
+      <h2>Câu hỏi thường gặp</h2>
+    </div>
+    <div class="faq-list">
+      <details *ngFor="let faq of faqs">
+        <summary>{{ faq.question }}</summary>
+        <p>{{ faq.answer }}</p>
+      </details>
+    </div>
+  </section>
+
+  <section id="contact" class="cta">
+    <div class="cta-card">
+      <div class="cta-text">
+        <p class="eyebrow">Sẵn sàng bắt đầu?</p>
+        <h2>Trải nghiệm HealthyAI miễn phí ngay hôm nay</h2>
+        <p>
+          Tạo tài khoản để đặt câu hỏi, ghi chép sức khỏe và nhận thông báo cá nhân hóa.
+        </p>
+      </div>
+      <div class="cta-actions">
+        <a routerLink="/login" class="btn primary">Đăng nhập</a>
+        <a routerLink="/register" class="btn ghost">Tạo tài khoản</a>
+      </div>
+    </div>
+    <div class="contact-card">
+      <h3>Cần trao đổi thêm?</h3>
+      <ul>
+        <li *ngFor="let channel of contactChannels">
+          <span>{{ channel.label }}</span>
+          <strong>{{ channel.value }}</strong>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="disclaimer">
+    <p>
+      HealthyAI chỉ đóng vai trò trợ lý hỗ trợ thông tin. Không đưa ra chẩn đoán hay thay thế ý kiến
+      chuyên môn y khoa. Khi gặp các triệu chứng bất thường, hãy liên hệ cơ sở y tế gần nhất.
+    </p>
+  </section>
+</div>

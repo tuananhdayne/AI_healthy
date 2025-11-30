@@ -1,0 +1,265 @@
+<div class="admin-container">
+  <!-- Sidebar Navigation -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-header">
+      <h2>Admin Panel</h2>
+      <p class="admin-email">{{ currentAdminUser?.email }}</p>
+    </div>
+    <nav class="sidebar-nav">
+      <button
+        class="nav-item"
+        [class.active]="activeTab === 'ai'"
+        (click)="setActiveTab('ai')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="1"></circle>
+          <circle cx="19" cy="12" r="1"></circle>
+          <circle cx="5" cy="12" r="1"></circle>
+        </svg>
+        <span>Quản Lý AI</span>
+      </button>
+      <button
+        class="nav-item"
+        [class.active]="activeTab === 'users'"
+        (click)="setActiveTab('users')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span>Quản Lý Người Dùng</span>
+      </button>
+      <button
+        class="nav-item"
+        [class.active]="activeTab === 'analytics'"
+        (click)="setActiveTab('analytics')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="2" x2="12" y2="22"></line>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+        <span>Thống Kê</span>
+      </button>
+      <button
+        class="nav-item"
+        [class.active]="activeTab === 'settings'"
+        (click)="setActiveTab('settings')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"></path>
+        </svg>
+        <span>Cài Đặt</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="logout-btn" (click)="logout()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 8 20 12 16 16"></polyline>
+          <line x1="9" y1="12" x2="20" y2="12"></line>
+        </svg>
+        <span>Đăng Xuất</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="admin-content">
+    <!-- AI Management Tab -->
+    <section class="tab-content" *ngIf="activeTab === 'ai'">
+      <div class="section-header">
+        <h2>Quản Lý Mô Hình AI</h2>
+        <p>Thêm, chỉnh sửa hoặc xóa các mô hình AI</p>
+      </div>
+
+      <div class="form-section">
+        <h3>Thêm Mô Hình AI Mới</h3>
+        <form [formGroup]="aiForm" (ngSubmit)="addAIModel()" class="ai-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tên Mô Hình</label>
+              <input type="text" formControlName="modelName" placeholder="e.g., GPT-4" />
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" formControlName="apiKey" placeholder="sk-..." />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Max Tokens</label>
+              <input type="number" formControlName="maxTokens" placeholder="8000" />
+            </div>
+            <div class="form-group">
+              <label>Trạng Thái</label>
+              <select formControlName="status">
+                <option value="active">Hoạt Động</option>
+                <option value="inactive">Tạm Dừng</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" [disabled]="aiForm.invalid">
+            Thêm Mô Hình
+          </button>
+        </form>
+      </div>
+
+      <div class="models-list">
+        <h3>Các Mô Hình Hiện Tại</h3>
+        <div class="model-card" *ngFor="let model of aiModels">
+          <div class="model-info">
+            <h4>{{ model.name }}</h4>
+            <p>API Key: <code>{{ model.apiKey }}</code></p>
+            <p>Max Tokens: <code>{{ model.maxTokens }}</code></p>
+            <span class="status-badge" [class.active]="model.status === 'active'">
+              {{ model.status === 'active' ? 'Hoạt Động' : 'Tạm Dừng' }}
+            </span>
+          </div>
+          <div class="model-actions">
+            <button class="btn btn-sm btn-secondary" (click)="editAIModel(model)">
+              Chỉnh Sửa
+            </button>
+            <button class="btn btn-sm btn-danger" (click)="deleteAIModel(model.id)">
+              Xóa
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- User Management Tab -->
+    <section class="tab-content" *ngIf="activeTab === 'users'">
+      <div class="section-header">
+        <h2>Quản Lý Người Dùng</h2>
+        <p>Quản lý người dùng, vai trò và quyền truy cập</p>
+      </div>
+
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Tên</th>
+              <th>Vai Trò</th>
+              <th>Trạng Thái</th>
+              <th>Hành Động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let user of users" [class.inactive]="(user.status || 'active') === 'inactive'">
+              <td>{{ user.email }}</td>
+              <td>{{ user.username || user.email }}</td>
+              <td>
+                <span class="role-badge" [class.admin]="user.role === 'admin'">
+                  {{ user.role === 'admin' ? 'Admin' : 'User' }}
+                </span>
+              </td>
+              <td>
+                <span class="status-badge" [class.active]="(user.status || 'active') === 'active'">
+                  {{ (user.status || 'active') === 'active' ? 'Hoạt Động' : 'Tạm Dừng' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button
+                  class="btn btn-sm btn-secondary"
+                  (click)="toggleUserStatus(user.id || user.uid)"
+                  [title]="(user.status || 'active') === 'active' ? 'Vô Hiệu Hóa' : 'Kích Hoạt'"
+                >
+                  {{ (user.status || 'active') === 'active' ? 'Vô Hiệu' : 'Kích Hoạt' }}
+                </button>
+                <button
+                  *ngIf="user.role === 'user'"
+                  class="btn btn-sm btn-success"
+                  (click)="promoteToAdmin(user.id || user.uid)"
+                >
+                  Tăng Cấp
+                </button>
+                <button
+                  *ngIf="user.role === 'admin' && ((user.uid || user.id) !== currentAdminUser?.id)"
+                  class="btn btn-sm btn-warning"
+                  (click)="demoteFromAdmin(user.id || user.uid)"
+                >
+                  Hạ Cấp
+                </button>
+                <button
+                  class="btn btn-sm btn-danger"
+                  (click)="removeUser(user.id || user.uid)"
+                  [disabled]="(user.uid || user.id) === currentAdminUser?.id"
+                >
+                  Xóa
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Analytics Tab -->
+    <section class="tab-content" *ngIf="activeTab === 'analytics'">
+      <div class="section-header">
+        <h2>Thống Kê & Phân Tích</h2>
+        <p>Xem tổng quan về hoạt động hệ thống</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Tổng Người Dùng</div>
+          <div class="stat-value">{{ analytics.totalUsers }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cuộc Chat Hoạt Động</div>
+          <div class="stat-value">{{ analytics.activeChats }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tổng Yêu Cầu</div>
+          <div class="stat-value">{{ analytics.totalRequests }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Thời Gian Phản Hồi Trung Bình</div>
+          <div class="stat-value">{{ analytics.avgResponseTime }}</div>
+        </div>
+      </div>
+
+      <div class="chart-placeholder">
+        <p>📊 Biểu đồ chi tiết sẽ được thêm sau</p>
+      </div>
+    </section>
+
+    <!-- Settings Tab -->
+    <section class="tab-content" *ngIf="activeTab === 'settings'">
+      <div class="section-header">
+        <h2>Cài Đặt Hệ Thống</h2>
+        <p>Quản lý cấu hình toàn hệ thống</p>
+      </div>
+
+      <div class="settings-form">
+        <div class="form-group">
+          <label>Tên Ứng Dụng</label>
+          <input type="text" value="GiaDienWeb AI" />
+        </div>
+        <div class="form-group">
+          <label>URL Cơ Sở API</label>
+          <input type="text" value="https://api.example.com" />
+        </div>
+        <div class="form-group">
+          <label>Cho Phép Đăng Ký Người Dùng Mới</label>
+          <select>
+            <option>Có</option>
+            <option>Không</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Lịch Sử Chat Tối Đa (Ngày)</label>
+          <input type="number" value="30" />
+        </div>
+        <button class="btn btn-primary" (click)="saveAdminSettings()">
+          Lưu Cài Đặt
+        </button>
+      </div>
+    </section>
+  </main>
+</div>

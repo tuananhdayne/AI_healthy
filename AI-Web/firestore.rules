@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========== userCredentials Collection ==========
+    match /userCredentials/{document=**} {
+      // Chỉ cho phép đọc/ghi dữ liệu của chính mình
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      // Cho phép tạo mới (cho đăng ký)
+      allow create: if request.auth != null;
+      // Không cho phép xóa
+      allow delete: if false;
+    }
+
+    // ========== users Collection (Profiles) ==========
+    match /users/{userId} {
+      // Mỗi người có thể đọc/cập nhật profile của chính mình
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ========== messages Collection (Chat) ==========
+    match /messages/{messageId} {
+      // Người dùng đã đăng nhập có thể tạo message mới
+      allow create: if request.auth != null;
+      // Chỉ người dùng có thể đọc messages của chính mình
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Chỉ người gửi có thể xóa
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ========== chatSessions Collection ==========
+    match /chatSessions/{sessionId} {
+      // Người dùng đã đăng nhập có thể tạo session mới
+      allow create: if request.auth != null;
+      // Chỉ người dùng có thể đọc/cập nhật sessions của chính mình
+      allow read, update: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Chỉ người dùng có thể xóa sessions của chính mình
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ========== medicineReminders Collection ==========
+    match /medicineReminders/{reminderId} {
+      // Người dùng đã đăng nhập có thể tạo reminder mới
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Chỉ người dùng có thể đọc reminders của chính mình
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Chỉ người dùng có thể cập nhật reminders của chính mình
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Chỉ người dùng có thể xóa reminders của chính mình
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ========== Fallback: Temporary rules (sẽ hết hạn) ==========
+    // Rules tạm thời cho các collection khác (nếu có)
+    match /{document=**} {
+      allow read, write: if request.time < timestamp.date(2025, 12, 18);
+    }
+  }
+}

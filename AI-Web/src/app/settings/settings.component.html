@@ -1,0 +1,319 @@
+<div class="settings-root">
+  <aside class="settings-nav">
+    <div class="nav-header">
+      <div class="header-icon">⚕️</div>
+      <div class="header-text">
+        <h2>Cài Đặt</h2>
+        <p class="header-subtitle">Quản lý tài khoản</p>
+      </div>
+    </div>
+    <ul>
+      <li *ngFor="let item of navItems" (click)="setActive(item)" [class.active]="active === item">
+        <span class="icon">{{ getNavIcon(item) }}</span>
+        <span class="label">{{ item }}</span>
+      </li>
+    </ul>
+  </aside>
+
+  <section class="settings-panel">
+    <header class="panel-header">
+      <div class="header-content">
+        <h3>{{ active }}</h3>
+        <p class="header-description">{{ getHeaderDescription(active) }}</p>
+      </div>
+    </header>
+
+    <div class="panel-body">
+      <form [formGroup]="settingsForm" (ngSubmit)="save()">
+        <div *ngIf="active === 'Chung'">
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">🎨</span>
+              <label class="card-title">Giao diện</label>
+            </div>
+            <div class="radios-group">
+              <label class="radio-option">
+                <input type="radio" formControlName="theme" value="light" />
+                <span class="radio-label">
+                  <span class="radio-icon">☀️</span>
+                  <span class="radio-text">
+                    <strong>Sáng</strong>
+                    <small>Giao diện sáng, dễ nhìn</small>
+                  </span>
+                </span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" formControlName="theme" value="dark" />
+                <span class="radio-label">
+                  <span class="radio-icon">🌙</span>
+                  <span class="radio-text">
+                    <strong>Tối</strong>
+                    <small>Giao diện tối, bảo vệ mắt</small>
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">🌐</span>
+              <label class="card-title">Ngôn ngữ</label>
+            </div>
+            <div class="form-field">
+              <select class="modern-select" formControlName="language">
+                <option value="auto">Dò tìm tự động</option>
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+              </select>
+              <p class="help-text">Ngôn ngữ hiển thị của giao diện</p>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="active === 'Thông báo'">
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">📧</span>
+              <label class="card-title">Email thông báo</label>
+            </div>
+            <label class="switch-option">
+              <input 
+                type="checkbox" 
+                [checked]="settingsForm.value.notifications" 
+                (change)="onNotificationChange($event)"
+              />
+              <span class="switch-slider"></span>
+              <span class="switch-label">
+                <strong>Nhận email thông báo</strong>
+                <small>Nhận thông báo qua email về các cập nhật quan trọng</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">🔔</span>
+              <label class="card-title">Thông báo trình duyệt</label>
+            </div>
+            <label class="switch-option">
+              <input 
+                type="checkbox" 
+                formControlName="pushNotifications"
+                (change)="onPushNotificationChange($event)"
+              />
+              <span class="switch-slider"></span>
+              <span class="switch-label">
+                <strong>Bật thông báo nhắc nhở</strong>
+                <small>Nhận thông báo nhắc nhở uống thuốc trên trình duyệt</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div *ngIf="active === 'Tài khoản'">
+          <!-- Thông tin người dùng -->
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">👤</span>
+              <label class="card-title">Thông tin cá nhân</label>
+            </div>
+            <form [formGroup]="userInfoForm" (ngSubmit)="saveUserInfo()">
+              <div class="form-field">
+                <label class="field-label">
+                  Họ và tên <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  formControlName="fullName" 
+                  placeholder="Nhập họ và tên"
+                  class="modern-input"
+                  [disabled]="!currentUser?.username"
+                />
+                <p class="field-help" *ngIf="!currentUser?.username">
+                  <span class="help-icon">ℹ️</span>
+                  Tài khoản Google không thể chỉnh sửa thông tin tại đây
+                </p>
+              </div>
+              <div class="form-field">
+                <label class="field-label">
+                  Email <span class="required">*</span>
+                </label>
+                <input 
+                  type="email" 
+                  formControlName="email" 
+                  placeholder="Nhập email"
+                  class="modern-input"
+                  [disabled]="!currentUser?.username"
+                />
+              </div>
+              <div class="form-field">
+                <label class="field-label">Số điện thoại</label>
+                <input 
+                  type="tel" 
+                  formControlName="phone" 
+                  placeholder="Nhập số điện thoại (10-11 số)"
+                  class="modern-input"
+                  [disabled]="!currentUser?.username"
+                />
+              </div>
+              <div class="form-actions" *ngIf="currentUser?.username">
+                <button 
+                  type="submit" 
+                  class="btn-primary-medical" 
+                  [disabled]="userInfoForm.invalid || isLoadingUserInfo"
+                >
+                  <span *ngIf="!isLoadingUserInfo">💾 Lưu thông tin</span>
+                  <span *ngIf="isLoadingUserInfo">⏳ Đang lưu...</span>
+                </button>
+              </div>
+              <div class="message-success" *ngIf="userInfoMessage">
+                <span class="message-icon">✅</span>
+                {{ userInfoMessage }}
+              </div>
+              <div class="message-error" *ngIf="userInfoError">
+                <span class="message-icon">⚠️</span>
+                {{ userInfoError }}
+              </div>
+            </form>
+          </div>
+
+          <!-- Mã PIN -->
+          <div class="settings-card" *ngIf="currentUser?.username">
+            <div class="card-header">
+              <span class="card-icon">🔐</span>
+              <label class="card-title">Mã PIN bảo mật</label>
+            </div>
+            <form [formGroup]="pinForm" (ngSubmit)="savePin()">
+              <div class="form-field">
+                <label class="field-label">
+                  Mã PIN hiện tại <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  formControlName="currentPin" 
+                  placeholder="Nhập mã PIN hiện tại (6 chữ số)"
+                  class="modern-input pin-input"
+                  maxlength="6"
+                  (keypress)="onPinCodeKeyPress($event)"
+                  (input)="onPinInput($event)"
+                />
+                <span class="error-message" *ngIf="pinForm.get('currentPin')?.invalid && pinForm.get('currentPin')?.touched">
+                  Vui lòng nhập mã PIN hiện tại (6 chữ số)
+                </span>
+              </div>
+              <div class="form-field">
+                <label class="field-label">
+                  Mã PIN mới <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  formControlName="newPin" 
+                  placeholder="Nhập mã PIN mới (6 chữ số)"
+                  class="modern-input pin-input"
+                  maxlength="6"
+                  (keypress)="onPinCodeKeyPress($event)"
+                  (input)="onPinInput($event)"
+                />
+                <span class="error-message" *ngIf="pinForm.get('newPin')?.invalid && pinForm.get('newPin')?.touched">
+                  Vui lòng nhập mã PIN mới (6 chữ số)
+                </span>
+              </div>
+              <div class="form-field">
+                <label class="field-label">
+                  Xác nhận mã PIN mới <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  formControlName="confirmPin" 
+                  placeholder="Nhập lại mã PIN mới (6 chữ số)"
+                  class="modern-input pin-input"
+                  maxlength="6"
+                  (keypress)="onPinCodeKeyPress($event)"
+                  (input)="onPinInput($event)"
+                />
+                <span class="error-message" *ngIf="pinForm.get('confirmPin')?.invalid && pinForm.get('confirmPin')?.touched">
+                  Vui lòng xác nhận mã PIN mới
+                </span>
+                <span class="error-message" *ngIf="pinForm.errors?.['pinMismatch'] && pinForm.get('confirmPin')?.touched">
+                  ⚠️ Mã PIN xác nhận không khớp
+                </span>
+              </div>
+              <div class="form-actions">
+                <button 
+                  type="submit" 
+                  class="btn-primary-medical" 
+                  [disabled]="pinForm.invalid || isLoadingPin"
+                >
+                  <span *ngIf="!isLoadingPin">🔒 Cập nhật mã PIN</span>
+                  <span *ngIf="isLoadingPin">⏳ Đang lưu...</span>
+                </button>
+              </div>
+              <div class="message-success" *ngIf="pinMessage">
+                <span class="message-icon">✅</span>
+                {{ pinMessage }}
+              </div>
+              <div class="message-error" *ngIf="pinError">
+                <span class="message-icon">⚠️</span>
+                {{ pinError }}
+              </div>
+            </form>
+          </div>
+          <div class="settings-card info-card" *ngIf="!currentUser?.username">
+            <div class="info-content">
+              <span class="info-icon">ℹ️</span>
+              <p>Tài khoản Google không có mã PIN</p>
+            </div>
+          </div>
+
+          <!-- Hành động -->
+          <div class="settings-card">
+            <div class="card-header">
+              <span class="card-icon">⚙️</span>
+              <label class="card-title">Hành động</label>
+            </div>
+            <div class="action-buttons">
+              <button 
+                type="button" 
+                class="action-btn btn-change-password" 
+                (click)="goToChangePassword()"
+                *ngIf="currentUser?.username"
+              >
+                <span class="btn-icon">🔑</span>
+                <span class="btn-text">
+                  <strong>Đổi Mật Khẩu</strong>
+                  <small>Thay đổi mật khẩu tài khoản</small>
+                </span>
+              </button>
+              <button type="button" class="action-btn btn-reset" (click)="reset()">
+                <span class="btn-icon">🔄</span>
+                <span class="btn-text">
+                  <strong>Đặt lại cài đặt</strong>
+                  <small>Khôi phục cài đặt mặc định</small>
+                </span>
+              </button>
+              <button type="button" class="action-btn btn-logout" (click)="logout()">
+                <span class="btn-icon">🚪</span>
+                <span class="btn-text">
+                  <strong>Đăng xuất</strong>
+                  <small>Thoát khỏi tài khoản</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions-footer" *ngIf="active !== 'Tài khoản'">
+          <button type="submit" class="btn-primary-medical">
+            <span class="btn-icon">💾</span>
+            Lưu cài đặt
+          </button>
+          <button type="button" class="btn-secondary-medical" (click)="reset()">
+            <span class="btn-icon">↺</span>
+            Khôi phục mặc định
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
