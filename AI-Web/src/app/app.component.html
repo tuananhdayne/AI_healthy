@@ -1,0 +1,7 @@
+<app-header></app-header>
+<main class="main-content">
+  <router-outlet></router-outlet>
+</main>
+<app-footer *ngIf="showFooter"></app-footer>
+<app-health-profile-setup *ngIf="showHealthProfileSetup" (profileSaved)="onProfileSaved()"></app-health-profile-setup>
+

@@ -1,0 +1,65 @@
+/* You can add global styles to this file, and also import other style files */
+
+/* Light Mode (Default) */
+:root,
+.light-mode {
+	--bg-primary: #ffffff;
+	--bg-secondary: #f8f9fa;
+	--bg-tertiary: #e9ecef;
+	--text-primary: #1a1a1a;
+	--text-secondary: #666666;
+	--text-tertiary: #999999;
+	--border-color: rgba(102, 126, 234, 0.1);
+	--border-light: #e0e0e0;
+	--header-bg: rgba(255, 255, 255, 0.95);
+	--sidebar-bg: #f8f9fa;
+	--chat-user-bg: rgba(102, 126, 234, 0.15);
+	--chat-bot-bg: #e8eef7;
+	--input-bg: #ffffff;
+	--input-border: #e0e0e0;
+	--shadow-light: rgba(0, 0, 0, 0.1);
+	--shadow-medium: rgba(102, 126, 234, 0.1);
+	--hover-bg: rgba(102, 126, 234, 0.05);
+	--active-bg: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+	--accent-primary: #667eea;
+	--accent-secondary: #764ba2;
+}
+
+/* Dark Mode */
+.dark-mode {
+	--bg-primary: #1a1a1a;
+	--bg-secondary: #2d2d2d;
+	--bg-tertiary: #3a3a3a;
+	--text-primary: #e4e4e7;
+	--text-secondary: #a1a1a6;
+	--text-tertiary: #71717a;
+	--border-color: rgba(102, 126, 234, 0.2);
+	--border-light: #3a3a3a;
+	--header-bg: rgba(26, 26, 26, 0.95);
+	--sidebar-bg: #2d2d2d;
+	--chat-user-bg: rgba(102, 126, 234, 0.25);
+	--chat-bot-bg: #2d3748;
+	--input-bg: #2d2d2d;
+	--input-border: #3a3a3a;
+	--shadow-light: rgba(0, 0, 0, 0.3);
+	--shadow-medium: rgba(102, 126, 234, 0.2);
+	--hover-bg: rgba(102, 126, 234, 0.1);
+	--active-bg: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+	--accent-primary: #667eea;
+	--accent-secondary: #764ba2;
+}
+
+* {
+	transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+body {
+	background-color: var(--bg-primary);
+	color: var(--text-primary);
+	transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Header spacing adjusted: remove extra top gap */
+body {
+	padding-top: 0;
+}

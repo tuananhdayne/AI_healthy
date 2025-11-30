@@ -1,0 +1,21 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+}
+
+.main-content {
+  flex: 1;
+  margin-top: 80px; // Height of header
+  display: block;
+  min-height: calc(100vh - 80px);
+  position: relative;
+  overflow: visible;
+}
+
+router-outlet {
+  display: block;
+  width: 100%;
+}
+

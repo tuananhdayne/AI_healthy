@@ -1,0 +1,324 @@
+<div class="register-container">
+  <div class="register-card">
+    <div class="register-header">
+      <h1>Đăng Ký</h1>
+      <p>Tạo tài khoản mới của bạn</p>
+    </div>
+    
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="register-form">
+      <!-- Error Message Alert -->
+      <div class="error-alert" *ngIf="showError" role="alert">
+        <div class="error-alert-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <div class="error-alert-content">
+          <strong>Lỗi!</strong>
+          <p>{{ errorMessage }}</p>
+        </div>
+        <button type="button" class="error-alert-close" (click)="clearError()" aria-label="Đóng">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Success Message Alert -->
+      <div class="success-alert" *ngIf="showSuccess" role="alert">
+        <div class="success-alert-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <div class="success-alert-content">
+          <strong>Thành công!</strong>
+          <p>{{ successMessage }}</p>
+        </div>
+        <button type="button" class="success-alert-close" (click)="clearSuccess()" aria-label="Đóng">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label for="username">Tên tài khoản</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <input 
+            type="text" 
+            id="username" 
+            formControlName="username"
+            placeholder="Chọn tên tài khoản (3-20 ký tự)"
+            class="form-input"
+            [class.error]="registerForm.get('username')?.invalid && registerForm.get('username')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('username')?.invalid && registerForm.get('username')?.touched">
+          <span *ngIf="registerForm.get('username')?.errors?.['required']">Vui lòng nhập tên tài khoản</span>
+          <span *ngIf="registerForm.get('username')?.errors?.['minlength']">Tên tài khoản phải có ít nhất 3 ký tự</span>
+          <span *ngIf="registerForm.get('username')?.errors?.['maxlength']">Tên tài khoản không quá 20 ký tự</span>
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="fullName">Họ và tên</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <input 
+            type="text" 
+            id="fullName" 
+            formControlName="fullName"
+            placeholder="Nhập họ và tên"
+            class="form-input"
+            [class.error]="registerForm.get('fullName')?.invalid && registerForm.get('fullName')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('fullName')?.invalid && registerForm.get('fullName')?.touched">
+          Vui lòng nhập họ và tên
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <polyline points="22,6 12,13 2,6"></polyline>
+          </svg>
+          <input 
+            type="email" 
+            id="email" 
+            formControlName="email"
+            placeholder="Nhập email của bạn"
+            class="form-input"
+            [class.error]="registerForm.get('email')?.invalid && registerForm.get('email')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('email')?.invalid && registerForm.get('email')?.touched">
+          Vui lòng nhập email hợp lệ
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Số điện thoại</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+          </svg>
+          <input 
+            type="tel" 
+            id="phone" 
+            formControlName="phone"
+            placeholder="Nhập số điện thoại"
+            class="form-input"
+            [class.error]="registerForm.get('phone')?.invalid && registerForm.get('phone')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('phone')?.invalid && registerForm.get('phone')?.touched">
+          Vui lòng nhập số điện thoại hợp lệ
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="dateOfBirth">Ngày sinh</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <input 
+            type="date" 
+            id="dateOfBirth" 
+            formControlName="dateOfBirth"
+            class="form-input"
+            [class.error]="registerForm.get('dateOfBirth')?.invalid && registerForm.get('dateOfBirth')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('dateOfBirth')?.invalid && registerForm.get('dateOfBirth')?.touched">
+          Vui lòng chọn ngày sinh
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Mật khẩu</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <input 
+            [type]="showPassword ? 'text' : 'password'" 
+            id="password" 
+            formControlName="password"
+            placeholder="Nhập mật khẩu"
+            class="form-input"
+            [class.error]="registerForm.get('password')?.invalid && registerForm.get('password')?.touched"
+          />
+          <button 
+            type="button" 
+            class="password-toggle"
+            (click)="togglePassword()"
+            aria-label="Toggle password visibility"
+          >
+            <svg *ngIf="!showPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg *ngIf="showPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('password')?.invalid && registerForm.get('password')?.touched">
+          Mật khẩu phải có ít nhất 6 ký tự
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Xác nhận mật khẩu</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <input 
+            [type]="showConfirmPassword ? 'text' : 'password'" 
+            id="confirmPassword" 
+            formControlName="confirmPassword"
+            placeholder="Nhập lại mật khẩu"
+            class="form-input"
+            [class.error]="registerForm.get('confirmPassword')?.invalid && registerForm.get('confirmPassword')?.touched"
+          />
+          <button 
+            type="button" 
+            class="password-toggle"
+            (click)="toggleConfirmPassword()"
+            aria-label="Toggle password visibility"
+          >
+            <svg *ngIf="!showConfirmPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg *ngIf="showConfirmPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('confirmPassword')?.invalid && registerForm.get('confirmPassword')?.touched">
+          <span *ngIf="registerForm.get('confirmPassword')?.errors?.['required']">Vui lòng xác nhận mật khẩu</span>
+        </span>
+        <span class="error-message" *ngIf="registerForm.errors?.['passwordMismatch'] && registerForm.get('confirmPassword')?.touched">
+          Mật khẩu không khớp
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="pinCode">Mã PIN (6 chữ số) <span class="required">*</span></label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <input 
+            type="text" 
+            id="pinCode" 
+            formControlName="pinCode"
+            placeholder="Nhập mã PIN 6 chữ số"
+            class="form-input"
+            maxlength="6"
+            pattern="[0-9]*"
+            inputmode="numeric"
+            (keypress)="onPinCodeKeyPress($event)"
+            [class.error]="registerForm.get('pinCode')?.invalid && registerForm.get('pinCode')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('pinCode')?.invalid && registerForm.get('pinCode')?.touched">
+          <span *ngIf="registerForm.get('pinCode')?.errors?.['required']">Vui lòng nhập mã PIN</span>
+          <span *ngIf="registerForm.get('pinCode')?.errors?.['pattern']">Mã PIN phải có đúng 6 chữ số</span>
+        </span>
+        <p class="help-text">Mã PIN này sẽ dùng để xác thực khi quên mật khẩu. Vui lòng ghi nhớ!</p>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPinCode">Xác nhận mã PIN <span class="required">*</span></label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <input 
+            type="text" 
+            id="confirmPinCode" 
+            formControlName="confirmPinCode"
+            placeholder="Nhập lại mã PIN"
+            class="form-input"
+            maxlength="6"
+            pattern="[0-9]*"
+            inputmode="numeric"
+            (keypress)="onPinCodeKeyPress($event)"
+            [class.error]="(registerForm.get('confirmPinCode')?.invalid || registerForm.errors?.['pinCodeMismatch']) && registerForm.get('confirmPinCode')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="registerForm.get('confirmPinCode')?.invalid && registerForm.get('confirmPinCode')?.touched">
+          <span *ngIf="registerForm.get('confirmPinCode')?.errors?.['required']">Vui lòng xác nhận mã PIN</span>
+        </span>
+        <span class="error-message" *ngIf="registerForm.errors?.['pinCodeMismatch'] && registerForm.get('confirmPinCode')?.touched">
+          Mã PIN xác nhận không khớp
+        </span>
+      </div>
+
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="agreeTerms" />
+          <span>Tôi đồng ý với <a href="#" class="terms-link">Điều khoản và Chính sách</a></span>
+        </label>
+      </div>
+
+      <button 
+        type="submit" 
+        class="submit-button"
+        [disabled]="registerForm.invalid || !registerForm.get('agreeTerms')?.value"
+        [class.loading]="isLoading"
+      >
+        <span *ngIf="!isLoading">Đăng Ký</span>
+        <span *ngIf="isLoading" class="loading-spinner"></span>
+      </button>
+
+      <div class="divider">
+        <span>Hoặc</span>
+      </div>
+
+      <div class="social-login">
+        <button type="button" class="social-button google">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="24" height="24">
+            <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083Z"/>
+            <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691Z"/>
+            <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238A11.91,11.91,0,0,1,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44Z"/>
+            <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303a12.04,12.04,0,0,1-4.087,5.571l.003-.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083Z"/>
+          </svg>
+          <span>Đăng ký với Google</span>
+        </button>
+      </div>
+
+      <div class="login-link">
+        <p>Đã có tài khoản? <a routerLink="/login">Đăng nhập ngay</a></p>
+      </div>
+    </form>
+  </div>
+</div>

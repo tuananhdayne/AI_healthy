@@ -1,0 +1,33 @@
+<div class="miss-pass-card">
+  <h2 class="title">Quên mật khẩu</h2>
+  <form [formGroup]="forgotPasswordForm" (ngSubmit)="onSubmit()">
+    <div class="input-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" formControlName="email" placeholder="Nhập email" />
+      <span class="error-message" *ngIf="forgotPasswordForm.get('email')?.invalid && forgotPasswordForm.get('email')?.touched">Vui lòng nhập email hợp lệ</span>
+    </div>
+    <div class="input-group">
+      <label for="username">Tên tài khoản</label>
+      <input type="text" id="username" formControlName="username" placeholder="Nhập tên tài khoản" />
+      <span class="error-message" *ngIf="forgotPasswordForm.get('username')?.invalid && forgotPasswordForm.get('username')?.touched">Vui lòng nhập tên tài khoản</span>
+    </div>
+    <div class="input-group">
+      <label for="pinCode">Mã PIN (6 số)</label>
+      <input type="text" id="pinCode" formControlName="pinCode" placeholder="Nhập mã PIN 6 số" maxlength="6" pattern="[0-9]*" inputmode="numeric" (keypress)="onPinCodeKeyPress($event)" />
+      <span class="error-message" *ngIf="forgotPasswordForm.get('pinCode')?.invalid && forgotPasswordForm.get('pinCode')?.touched">
+        <span *ngIf="forgotPasswordForm.get('pinCode')?.errors?.['required']">Vui lòng nhập mã PIN</span>
+        <span *ngIf="forgotPasswordForm.get('pinCode')?.errors?.['pattern']">Mã PIN phải có đúng 6 chữ số</span>
+      </span>
+    </div>
+    <div *ngIf="showError && errorMessage" class="error-message">{{ errorMessage }}</div>
+    <div *ngIf="showSuccess && successMessage" class="success-message">{{ successMessage }}</div>
+    <button type="submit" class="btn-submit" [disabled]="forgotPasswordForm.invalid || isLoading">
+      <span *ngIf="!isLoading">Gửi link đặt lại mật khẩu</span>
+      <span *ngIf="isLoading" class="loading-spinner"></span>
+    </button>
+    <div class="back-to-login">
+      <p>Nhớ mật khẩu? <a routerLink="/login">Quay lại đăng nhập</a></p>
+    </div>
+  </form>
+</div>
+            placeholder="Nhập tên tài khoản"

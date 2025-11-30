@@ -1,0 +1,98 @@
+<div class="medicine-reminder-container">
+  <div class="header">
+    <h2>🔔 Quản lý nhắc nhở uống thuốc</h2>
+    <button class="btn-add" (click)="showAddReminderForm()">
+      <span>+</span> Thêm lịch nhắc nhở
+    </button>
+  </div>
+
+  <div class="messages">
+    <div class="error-message" *ngIf="errorMessage">
+      ⚠️ {{ errorMessage }}
+    </div>
+    <div class="success-message" *ngIf="successMessage">
+      ✅ {{ successMessage }}
+    </div>
+  </div>
+
+  <!-- Form thêm/sửa -->
+  <div class="add-form" *ngIf="showAddForm">
+    <h3>{{ isEditing ? 'Sửa' : 'Thêm' }} lịch nhắc nhở</h3>
+    
+    <form (ngSubmit)="saveReminder()">
+      <div class="form-group">
+        <label>Tên thuốc *</label>
+        <input type="text" [(ngModel)]="medicineName" name="medicineName" required placeholder="Ví dụ: Paracetamol">
+      </div>
+
+      <div class="form-group">
+        <label>Giờ uống *</label>
+        <input type="time" [(ngModel)]="time" name="time" required>
+      </div>
+
+      <div class="form-group">
+        <label>Lặp lại *</label>
+        <select [(ngModel)]="repeatType" name="repeatType" (change)="weekday = null">
+          <option value="daily">Hàng ngày</option>
+          <option value="weekly">Hàng tuần</option>
+          <option value="once">Một lần</option>
+        </select>
+      </div>
+
+      <div class="form-group" *ngIf="repeatType === 'weekly'">
+        <label>Ngày trong tuần *</label>
+        <select [(ngModel)]="weekday" name="weekday" required>
+          <option [value]="null">Chọn ngày</option>
+          <option *ngFor="let day of weekdays" [value]="day.value">
+            {{ day.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group" *ngIf="repeatType === 'once'">
+        <label>Ngày bắt đầu</label>
+        <input type="date" [(ngModel)]="startDate" name="startDate">
+      </div>
+
+      <div class="form-group">
+        <label>Ghi chú</label>
+        <textarea [(ngModel)]="notes" name="notes" rows="3" placeholder="Ví dụ: Uống sau khi ăn"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" (click)="cancelForm()">Hủy</button>
+        <button type="submit" class="btn-save">{{ isEditing ? 'Cập nhật' : 'Tạo' }}</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Danh sách reminders -->
+  <div class="reminders-list" *ngIf="reminders.length > 0">
+    <div class="reminder-item" *ngFor="let reminder of reminders">
+      <div class="reminder-info">
+        <div class="medicine-name">💊 {{ reminder.medicine_name }}</div>
+        <div class="reminder-details">
+          <span class="time">⏰ {{ formatTime(reminder.time) }}</span>
+          <span class="repeat">🔄 {{ getRepeatTypeLabel(reminder.repeat_type) }}</span>
+          <span class="weekday" *ngIf="reminder.weekday !== null && reminder.weekday !== undefined">
+            📅 {{ weekdays[reminder.weekday].label }}
+          </span>
+        </div>
+        <div class="notes" *ngIf="reminder.notes">{{ reminder.notes }}</div>
+        <div class="next-reminder" *ngIf="reminder.next_reminder_time">
+          Lần nhắc tiếp theo: {{ reminder.next_reminder_time | date: 'dd/MM/yyyy HH:mm' }}
+        </div>
+      </div>
+      <div class="reminder-actions">
+        <button class="btn-edit" (click)="editReminder(reminder)">Sửa</button>
+        <button class="btn-delete" (click)="deleteReminder(reminder)">Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" *ngIf="reminders.length === 0 && !showAddForm">
+    <p>Chưa có lịch nhắc nhở nào</p>
+    <button class="btn-add" (click)="showAddReminderForm()">Thêm lịch nhắc nhở đầu tiên</button>
+  </div>
+</div>
+

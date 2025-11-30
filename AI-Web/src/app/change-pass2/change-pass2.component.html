@@ -1,0 +1,30 @@
+<div class="change-pass2-container">
+	<form [formGroup]="changePassForm" (ngSubmit)="onSubmit()">
+		<h2 class="title">Đặt lại mật khẩu mới</h2>
+
+		<!-- Mật khẩu mới -->
+		<div class="input-group">
+			<label for="newPassword">Mật khẩu mới</label>
+			<div class="input-wrapper">
+				<input id="newPassword" type="password" formControlName="newPassword" placeholder="Nhập mật khẩu mới" />
+			</div>
+		</div>
+
+		<!-- Xác nhận mật khẩu -->
+		<div class="input-group">
+			<label for="confirmPassword">Xác nhận mật khẩu</label>
+			<div class="input-wrapper">
+				<input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="Nhập lại mật khẩu" />
+			</div>
+		</div>
+
+		<!-- Thông báo lỗi -->
+		<div *ngIf="errorMsg" class="error">{{ errorMsg }}</div>
+		<!-- Thông báo thành công -->
+		<div *ngIf="successMsg" class="success">{{ successMsg }}</div>
+
+		<div class="input-group">
+			<button type="submit" class="btn-confirm">Xác nhận</button>
+		</div>
+	</form>
+</div>

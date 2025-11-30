@@ -1,0 +1,426 @@
+// Style card giống login
+
+.miss-pass-card {
+  background: #fff;
+  backdrop-filter: blur(10px);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(102, 126, 234, 0.15), 0 0 0 1px rgba(102, 126, 234, 0.05);
+  padding: 40px;
+  width: 100%;
+  max-width: 450px;
+  position: relative;
+  z-index: 1;
+  margin: 48px auto;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+.title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 24px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.input-group {
+  margin-bottom: 24px;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 500;
+  font-size: 14px;
+}
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+input[type="email"], input[type="text"] {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background: #fff;
+  outline: none;
+}
+input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+input.error {
+  border-color: #e74c3c;
+}
+input::placeholder {
+  color: #bbb;
+}
+.error-message {
+  color: #e74c3c;
+  font-size: 14px;
+  margin-top: 4px;
+  text-align: left;
+}
+.success-message {
+  color: #27ae60;
+  margin-bottom: 14px;
+  text-align: center;
+  font-weight: 500;
+}
+.btn-submit {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(90deg, #667eea 60%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.08);
+  transition: background 0.2s;
+  margin-top: 8px;
+}
+.btn-submit:disabled {
+  background: #bdbdbd;
+  cursor: not-allowed;
+}
+.loading-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-top: 3px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.back-to-login {
+  text-align: center;
+  margin-top: 18px;
+  font-size: 15px;
+}
+    
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  
+
+
+.miss-pass-header {
+  text-align: center;
+  margin-bottom: 30px;
+
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #333;
+    margin: 0 0 8px 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  p {
+    color: #666;
+    font-size: 16px;
+    margin: 0;
+  }
+}
+
+.miss-pass-form {
+  .form-group {
+    margin-bottom: 24px;
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+      font-size: 14px;
+
+      .required {
+        color: #e74c3c;
+        margin-left: 4px;
+      }
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      .input-icon {
+        position: absolute;
+        left: 16px;
+        width: 20px;
+        height: 20px;
+        color: #999;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 14px 16px 14px 48px;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        background: #fff;
+        outline: none;
+        font-family: inherit;
+
+        &:focus {
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        &.error {
+          border-color: #e74c3c;
+        }
+
+        &::placeholder {
+          color: #bbb;
+        }
+
+        &[type="date"] {
+          color: #333;
+          cursor: pointer;
+
+          &::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+
+            &:hover {
+              opacity: 1;
+            }
+          }
+        }
+      }
+    }
+
+    .error-message {
+      display: block;
+      color: #e74c3c;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .help-text {
+      display: block;
+      color: #666;
+      font-size: 12px;
+      margin-top: 6px;
+      font-style: italic;
+    }
+  }
+
+  .success-alert {
+    margin-bottom: 20px;
+    animation: slideDown 0.3s ease-out;
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .success-alert-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      border-radius: 12px;
+      position: relative;
+
+      .success-icon {
+        width: 24px;
+        height: 24px;
+        color: #4caf50;
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+
+      .success-text {
+        flex: 1;
+
+        strong {
+          display: block;
+          color: #4caf50;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 4px;
+        }
+
+        p {
+          color: #2e7d32;
+          font-size: 13px;
+          margin: 0;
+          line-height: 1.5;
+        }
+      }
+    }
+  }
+
+  .error-alert {
+    margin-bottom: 20px;
+    animation: slideDown 0.3s ease-out;
+
+    .error-alert-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #fee;
+      border: 2px solid #e74c3c;
+      border-radius: 12px;
+      position: relative;
+
+      .error-icon {
+        width: 24px;
+        height: 24px;
+        color: #e74c3c;
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+
+      .error-text {
+        flex: 1;
+
+        strong {
+          display: block;
+          color: #e74c3c;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 4px;
+        }
+
+        p {
+          color: #c0392b;
+          font-size: 13px;
+          margin: 0;
+          line-height: 1.5;
+        }
+      }
+
+      .error-close {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        color: #e74c3c;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+        border-radius: 4px;
+
+        svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        &:hover {
+          background: rgba(231, 76, 60, 0.1);
+          transform: scale(1.1);
+        }
+      }
+    }
+  }
+
+  .submit-button {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 24px;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  }
+
+  .back-to-login {
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.3s ease;
+
+      &:hover {
+        color: #764ba2;
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 480px) {
+  .miss-pass-card {
+    padding: 30px 20px;
+  }
+
+  .miss-pass-header h1 {
+    font-size: 28px;
+  }
+}
+

@@ -1,0 +1,133 @@
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <h1>Đăng Nhập</h1>
+      <p>Chào mừng bạn trở lại!</p>
+    </div>
+    
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+      <!-- Error Message Alert -->
+      <div class="alert alert-danger" *ngIf="showError" role="alert">
+        <button type="button" class="alert-close" (click)="clearError()">×</button>
+        <strong>Lỗi!</strong> {{ errorMessage }}
+      </div>
+
+      <div class="form-group">
+        <label for="username">Tên tài khoản</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <input 
+            type="text" 
+            id="username" 
+            formControlName="username"
+            placeholder="Nhập tên tài khoản"
+            class="form-input"
+            [class.error]="loginForm.get('username')?.invalid && loginForm.get('username')?.touched"
+          />
+        </div>
+        <span class="error-message" *ngIf="loginForm.get('username')?.invalid && loginForm.get('username')?.touched">
+          Vui lòng nhập tên tài khoản
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Mật khẩu</label>
+        <div class="input-wrapper">
+          <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <input 
+            [type]="showPassword ? 'text' : 'password'" 
+            id="password" 
+            formControlName="password"
+            placeholder="Nhập mật khẩu"
+            class="form-input"
+            [class.error]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
+          />
+          <button 
+            type="button" 
+            class="password-toggle"
+            (click)="togglePassword()"
+            aria-label="Toggle password visibility"
+          >
+            <svg *ngIf="!showPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg *ngIf="showPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+        <span class="error-message" *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched">
+          Mật khẩu phải có ít nhất 6 ký tự
+        </span>
+      </div>
+
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="rememberMe" />
+          <span>Ghi nhớ đăng nhập</span>
+        </label>
+        <a routerLink="/forgot-password" class="forgot-password">Quên mật khẩu?</a>
+      </div>
+
+      <!-- Error message -->
+      <div class="error-alert" *ngIf="showError && errorMessage">
+        <div class="error-alert-content">
+          <svg class="error-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div class="error-text">
+            <strong>Đăng nhập thất bại</strong>
+            <p>{{ errorMessage }}</p>
+          </div>
+          <button type="button" class="error-close" (click)="clearError()" aria-label="Đóng">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button 
+        type="submit" 
+        class="submit-button"
+        [disabled]="loginForm.invalid || isLoading"
+        [class.loading]="isLoading"
+      >
+        <span *ngIf="!isLoading">Đăng Nhập</span>
+        <span *ngIf="isLoading" class="loading-spinner"></span>
+      </button>
+
+      <div class="divider">
+        <span>Hoặc</span>
+      </div>
+
+      <!-- Social login buttons -->
+      <div class="social-login-group">
+        <button type="button" class="social-btn google-btn" style="width:100%" (click)="loginWithGoogle()">
+          <svg class="social-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="24" height="24">
+            <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083Z"/>
+            <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691Z"/>
+            <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238A11.91,11.91,0,0,1,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44Z"/>
+            <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303a12.04,12.04,0,0,1-4.087,5.571l.003-.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083Z"/>
+          </svg>
+          Đăng nhập bằng Google
+        </button>
+      </div>
+
+      <div class="signup-link">
+        <p>Chưa có tài khoản? <a routerLink="/register">Đăng ký ngay</a></p>
+      </div>
+    </form>
+  </div>
+</div>

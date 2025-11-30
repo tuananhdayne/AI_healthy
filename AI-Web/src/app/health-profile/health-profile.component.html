@@ -1,0 +1,179 @@
+<div class="health-profile-page">
+  <div class="page-header">
+    <div class="header-content">
+      <div class="header-icon">⚕️</div>
+      <div class="header-text">
+        <h1>Hồ sơ sức khỏe</h1>
+        <p>Thông tin sức khỏe và gợi ý tập luyện cá nhân hóa</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="profile-container" *ngIf="!isLoading">
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="!profile">
+      <div class="empty-icon">📋</div>
+      <h2>Chưa có hồ sơ sức khỏe</h2>
+      <p>Hãy thiết lập hồ sơ để nhận gợi ý tập luyện phù hợp</p>
+      <button class="btn-primary-medical" (click)="startEdit()">
+        <span class="btn-icon">➕</span>
+        Thiết lập hồ sơ
+      </button>
+    </div>
+
+    <!-- Profile Content -->
+    <div class="profile-content" *ngIf="profile">
+      <!-- Profile Info Card -->
+      <div class="info-card">
+        <div class="card-header">
+          <span class="card-icon">👤</span>
+          <h2 class="card-title">Thông tin cá nhân</h2>
+          <button class="edit-btn" (click)="startEdit()" *ngIf="!isEditing">
+            <span class="btn-icon">✏️</span>
+            Chỉnh sửa
+          </button>
+        </div>
+
+        <div class="card-body" *ngIf="!isEditing">
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Tuổi</span>
+              <span class="info-value">{{ profile.tuoi }} tuổi</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Chiều cao</span>
+              <span class="info-value">{{ profile.chieuCao }} cm</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Cân nặng</span>
+              <span class="info-value">{{ profile.canNang }} kg</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Giới tính</span>
+              <span class="info-value">{{ getGioiTinhLabel(profile.gioiTinh) }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Mức vận động</span>
+              <span class="info-value">{{ getMucVanDongLabel(profile.mucVanDong) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit Form -->
+        <form [formGroup]="editForm" (ngSubmit)="saveProfile()" *ngIf="isEditing" class="edit-form">
+          <div class="form-row">
+            <div class="form-field">
+              <label class="field-label">Tuổi <span class="required">*</span></label>
+              <input type="number" formControlName="tuoi" class="modern-input" min="1" max="120" />
+            </div>
+            <div class="form-field">
+              <label class="field-label">Chiều cao (cm) <span class="required">*</span></label>
+              <input type="number" formControlName="chieuCao" class="modern-input" min="50" max="250" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="field-label">Cân nặng (kg) <span class="required">*</span></label>
+              <input type="number" formControlName="canNang" class="modern-input" min="10" max="300" step="0.1" />
+            </div>
+            <div class="form-field">
+              <label class="field-label">Giới tính <span class="required">*</span></label>
+              <select formControlName="gioiTinh" class="modern-select">
+                <option value="nam">Nam</option>
+                <option value="nu">Nữ</option>
+                <option value="khac">Khác</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="field-label">Mức vận động <span class="required">*</span></label>
+              <select formControlName="mucVanDong" class="modern-select">
+                <option value="it">Ít</option>
+                <option value="vua">Vừa</option>
+                <option value="nhieu">Nhiều</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary-medical" (click)="cancelEdit()">Hủy</button>
+            <button type="submit" class="btn-primary-medical" [disabled]="editForm.invalid || isLoading">
+              <span *ngIf="!isLoading">💾 Lưu</span>
+              <span *ngIf="isLoading">⏳ Đang lưu...</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- BMI Card -->
+      <div class="bmi-card" *ngIf="bmiResult">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <h2 class="card-title">Chỉ số BMI</h2>
+        </div>
+        <div class="card-body">
+          <div class="bmi-display">
+            <div class="bmi-value" [style.color]="getBMIColor(bmiResult.category)">
+              {{ bmiResult.value }}
+            </div>
+            <div class="bmi-category" [style.color]="getBMIColor(bmiResult.category)">
+              {{ bmiResult.category }}
+            </div>
+          </div>
+          <p class="bmi-description">{{ bmiResult.description }}</p>
+        </div>
+      </div>
+
+      <!-- Exercise Suggestion Card -->
+      <div class="exercise-card" *ngIf="exerciseSuggestion">
+        <div class="card-header">
+          <span class="card-icon">💪</span>
+          <h2 class="card-title">Gợi ý tập luyện</h2>
+        </div>
+        <div class="card-body">
+          <h3 class="suggestion-title">{{ exerciseSuggestion.title }}</h3>
+          <div class="suggestion-meta">
+            <div class="meta-item">
+              <span class="meta-icon">📅</span>
+              <span class="meta-label">Tần suất:</span>
+              <span class="meta-value">{{ exerciseSuggestion.frequency }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-icon">⏱️</span>
+              <span class="meta-label">Thời gian:</span>
+              <span class="meta-value">{{ exerciseSuggestion.duration }}</span>
+            </div>
+          </div>
+          <div class="exercises-list">
+            <h4 class="exercises-title">Các bài tập gợi ý:</h4>
+            <ul>
+              <li *ngFor="let exercise of exerciseSuggestion.exercises; let i = index">
+                <span class="exercise-icon">✓</span>
+                <span>{{ exercise || 'Bài tập ' + (i + 1) }}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="suggestion-notes">
+            <span class="notes-icon">💡</span>
+            <p>{{ exerciseSuggestion.notes }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="message-success" *ngIf="successMessage">
+      <span class="message-icon">✅</span>
+      {{ successMessage }}
+    </div>
+    <div class="message-error" *ngIf="errorMessage">
+      <span class="message-icon">⚠️</span>
+      {{ errorMessage }}
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading">
+    <div class="loading-spinner"></div>
+    <p>Đang tải...</p>
+  </div>
+</div>
+

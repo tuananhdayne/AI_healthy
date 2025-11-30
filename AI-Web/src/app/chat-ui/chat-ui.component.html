@@ -1,0 +1,145 @@
+<div class="chat-wrapper">
+	<!-- Sidebar lịch sử chat -->
+	<div class="chat-sidebar">
+		<div class="sidebar-header">
+			<h2>Lịch sử chat</h2>
+		</div>
+		<div class="new-chat-section">
+			<button class="new-chat-btn" (click)="startNewChat()" title="Cuộc trò chuyện mới">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<line x1="12" y1="5" x2="12" y2="19"></line>
+					<line x1="5" y1="12" x2="19" y2="12"></line>
+				</svg>
+				<span>New Chat</span>
+			</button>
+		</div>
+		<div class="sidebar-content">
+			<div 
+				*ngFor="let chat of chatHistories" 
+				class="chat-history-item"
+				[class.active]="currentChatId === chat.id"
+				(click)="selectChat(chat)"
+			>
+				<div class="history-item-header">
+					<div class="history-icon">💬</div>
+					<div class="history-info">
+						<div class="history-title" [title]="chat.title">{{ chat.title || 'Cuộc trò chuyện' }}</div>
+						<div class="history-time">{{ formatDate(chat.timestamp) }}</div>
+					</div>
+					<button 
+						class="delete-chat-btn" 
+						(click)="deleteChat(chat, $event)"
+						title="Xóa cuộc trò chuyện"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="3 6 5 6 21 6"></polyline>
+							<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+						</svg>
+					</button>
+				</div>
+				<div class="history-preview" [title]="chat.lastMessage">{{ chat.lastMessage || 'Chưa có tin nhắn' }}</div>
+			</div>
+		</div>
+		
+		<!-- Account section -->
+		<div class="sidebar-footer">
+			<div class="account-section">
+				<button class="account-btn" (click)="toggleAccountMenu()" [class.active]="isAccountMenuOpen">
+					<div class="account-avatar">👤</div>
+					<span class="account-name">Tài khoản</span>
+					<svg class="dropdown-arrow" [class.rotated]="isAccountMenuOpen" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="6 9 12 15 18 9"></polyline>
+					</svg>
+				</button>
+				
+				<div class="account-menu" *ngIf="isAccountMenuOpen">
+					<div class="actions">
+						<button class="action-btn" (click)="openSettings()" title="Cài đặt">
+							<span class="icon">⚙️</span>
+							<span class="label">Cài đặt</span>
+						</button>
+						<button class="action-btn danger" (click)="logout()" title="Đăng xuất">
+							<span class="icon">↪</span>
+							<span class="label">Đăng xuất</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Chat chính -->
+	<div class="chat-main">
+		<div #container class="messages">
+			<div *ngFor="let msg of messages"
+				 class="message"
+				 [class.user]="msg.role === 'user'"
+				 [class.bot]="msg.role === 'assistant'"
+         [class.pending]="msg.pending">
+		
+				<div class="avatar">
+					<div *ngIf="msg.role === 'assistant'" class="avatar-icon bot-icon">🤖</div>
+					<div *ngIf="msg.role === 'user'" class="avatar-icon user-icon">👤</div>
+				</div>
+		
+				<div class="bubble">
+					{{ msg.content }}
+				</div>
+			</div>
+		</div>
+
+    <div class="chat-status" *ngIf="lastBotMeta">
+      <div class="status-row">
+        <div class="status-chip">
+          <span class="label">Intent</span>
+          <span class="value">
+            {{ lastBotMeta.intent || 'Chưa rõ' }}
+            <small *ngIf="lastBotMeta.intentConfidence">({{ lastBotMeta.intentConfidence | number: '1.0-2' }})</small>
+          </span>
+        </div>
+        <div class="status-chip" [class.danger]="lastBotMeta.risk === 'high'">
+          <span class="label">Mức độ</span>
+          <span class="value">{{ lastBotMeta.risk || 'an toàn' }}</span>
+        </div>
+        <div class="status-chip" *ngIf="lastBotMeta.stage">
+          <span class="label">Trạng thái</span>
+          <span class="value">{{ lastBotMeta.stage }}</span>
+        </div>
+      </div>
+      <div class="clarification-tip" *ngIf="lastBotMeta.clarificationNeeded && lastBotMeta.clarificationQuestion">
+        {{ lastBotMeta.clarificationQuestion }}
+      </div>
+      <div class="source-list" *ngIf="lastBotMeta.sources?.length">
+        <span class="label">Nguồn tham chiếu:</span>
+        <ul>
+          <li *ngFor="let source of lastBotMeta.sources | slice:0:2">
+            {{ source['text'] }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="error-banner" *ngIf="errorMessage">
+      {{ errorMessage }}
+    </div>
+
+    <div class="loading-banner" *ngIf="isCheckingReady">
+      🔄 Đang kiểm tra trạng thái models...
+    </div>
+	
+		<form class="input-row" (ngSubmit)="send()">
+			<input 
+				type="text" 
+				[(ngModel)]="input" 
+				name="msg"
+				placeholder="Nhập tin nhắn..."
+				autocomplete="off"
+			/>
+		
+			<button type="submit" [disabled]="!input.trim() || isSending">
+				{{ isSending ? 'Đang gửi...' : 'Gửi' }}
+			</button>
+		</form>
+	</div>
+</div>
+  
