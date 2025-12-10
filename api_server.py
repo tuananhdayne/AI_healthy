@@ -78,8 +78,7 @@ async def load_models():
             step_times["firestore"] = time.time() - step_start
             print(f"      ✅ Firestore đã sẵn sàng ({step_times['firestore']:.2f}s)\n")
         except Exception as e:
-            print(f"      ⚠️  Cảnh báo: Không thể khởi tạo Firestore: {e}")
-            print("      Hệ thống vẫn sẽ hoạt động nhưng không lưu vào Firestore")
+            # Frontend đã lưu trực tiếp vào Firestore
             step_times["firestore"] = time.time() - step_start
             print(f"      ⏱️  Thời gian: {step_times['firestore']:.2f}s\n")
         
@@ -434,7 +433,7 @@ Hãy tạo gợi ý tập luyện PHÙ HỢP, CHI TIẾT và RỘNG."""
                 try:
                     suggestion = json.loads(json_str)
                 except:
-                    print(f"⚠️ Không thể parse JSON sau khi fix: {e}")
+                    # Không thể parse JSON
                     raise ValueError("Không thể parse JSON từ response")
             
             # Validate và đảm bảo đầy đủ fields
@@ -474,7 +473,7 @@ Hãy tạo gợi ý tập luyện PHÙ HỢP, CHI TIẾT và RỘNG."""
             
             # Nếu không có exercises hợp lệ, dùng fallback
             if len(exercises_clean) == 0:
-                print("⚠️ Không có exercises hợp lệ từ Gemini, dùng fallback")
+                # Không có exercises hợp lệ từ Gemini, dùng fallback
                 exercises_clean = ["Đi bộ 30 phút mỗi ngày", "Tập thể dục nhẹ nhàng", "Yoga hoặc stretching", "Đạp xe hoặc bơi lội"]
             
             result = {
@@ -489,7 +488,7 @@ Hãy tạo gợi ý tập luyện PHÙ HỢP, CHI TIẾT và RỘNG."""
             return result
         else:
             # Nếu không parse được JSON, trả về fallback
-            print(f"⚠️ Không tìm thấy JSON trong response: {response_text[:200]}...")
+            # Không tìm thấy JSON trong response
             raise ValueError("Không thể parse JSON từ response")
             
     except Exception as e:
@@ -556,8 +555,7 @@ async def create_reminder(reminder: MedicineReminderRequest):
             saved_id = save_medicine_reminder(reminder_data)
             if saved_id:
                 reminder_data["id"] = saved_id
-        except Exception as firestore_error:
-            print(f"⚠️ Lỗi khi lưu vào Firestore, lưu vào memory: {firestore_error}")
+        except Exception:
             # Fallback: lưu vào memory
             if not hasattr(app.state, 'medicine_reminders'):
                 app.state.medicine_reminders = {}
@@ -566,7 +564,6 @@ async def create_reminder(reminder: MedicineReminderRequest):
         return MedicineReminderResponse(**reminder_data)
         
     except Exception as e:
-        print(f"❌ Lỗi khi tạo reminder: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -599,8 +596,8 @@ async def get_reminders(user_id: str):
                     }
                     result.append(MedicineReminderResponse(**reminder_dict))
                 return result
-        except Exception as firestore_error:
-            print(f"⚠️ Lỗi khi lấy từ Firestore, fallback về memory: {firestore_error}")
+        except Exception:
+            pass
         
         # Fallback: lấy từ memory
         if not hasattr(app.state, 'medicine_reminders'):
@@ -614,7 +611,6 @@ async def get_reminders(user_id: str):
         
         return user_reminders
     except Exception as e:
-        print(f"❌ Lỗi khi lấy reminders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -627,8 +623,8 @@ async def delete_reminder(reminder_id: str):
             from firestore_service import delete_medicine_reminder
             if delete_medicine_reminder(reminder_id):
                 return {"status": "deleted", "id": reminder_id}
-        except Exception as firestore_error:
-            print(f"⚠️ Lỗi khi xóa từ Firestore, fallback về memory: {firestore_error}")
+        except Exception:
+            pass
         
         # Fallback: xóa từ memory
         if hasattr(app.state, 'medicine_reminders'):
@@ -638,7 +634,6 @@ async def delete_reminder(reminder_id: str):
         
         raise HTTPException(status_code=404, detail="Reminder not found")
     except Exception as e:
-        print(f"❌ Lỗi khi xóa reminder: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -707,8 +702,8 @@ async def check_and_send_reminders():
                         sent_count += 1
                 
                 return {"sent": sent_count, "checked_at": now.isoformat()}
-        except Exception as firestore_error:
-            print(f"⚠️ Lỗi khi lấy từ Firestore, fallback về memory: {firestore_error}")
+        except Exception:
+            pass
         
         # Fallback: lấy từ memory
         if not hasattr(app.state, 'medicine_reminders'):
@@ -747,7 +742,6 @@ async def check_and_send_reminders():
         return {"sent": sent_count, "checked_at": now.isoformat()}
         
     except Exception as e:
-        print(f"❌ Lỗi khi kiểm tra reminders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -758,13 +752,11 @@ async def send_reminder_notification(reminder: Dict[str, Any]):
         if reminder.get('notes'):
             message += f"\nGhi chú: {reminder['notes']}"
         
-        print(f"📧 Gửi thông báo đến {reminder['user_email']}: {message}")
-        
         # Gửi email qua Firebase Functions
         try:
             import requests
             firebase_function_url = "https://us-central1-giadienweb.cloudfunctions.net/sendMedicineReminder"
-            response = requests.post(
+            requests.post(
                 firebase_function_url,
                 json={
                     "email": reminder['user_email'],
@@ -774,18 +766,11 @@ async def send_reminder_notification(reminder: Dict[str, Any]):
                 },
                 timeout=10
             )
-            if response.status_code == 200:
-                print(f"✅ Đã gửi email thành công đến {reminder['user_email']}")
-            else:
-                print(f"⚠️ Không thể gửi email: {response.status_code}")
-        except Exception as email_error:
-            print(f"⚠️ Lỗi khi gửi email: {email_error}")
-            # Vẫn tiếp tục, không throw error
+        except Exception:
+            pass
         
-        # TODO: Gửi web push notification nếu user đã enable
-        
-    except Exception as e:
-        print(f"❌ Lỗi khi gửi thông báo: {e}")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

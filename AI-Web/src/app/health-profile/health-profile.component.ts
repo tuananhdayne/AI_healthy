@@ -131,10 +131,14 @@ export class HealthProfileComponent implements OnInit {
       };
 
       await this.firebaseService.saveHealthProfile(user.id, profileData);
-      this.profile = profileData;
-      this.calculateBMIAndSuggestion();
+      // Reload profile from Firebase to ensure consistency
+      this.profile = await this.firebaseService.getHealthProfile(user.id);
+      if (this.profile) {
+        this.calculateBMIAndSuggestion();
+        this.editForm.patchValue(this.profile);
+      }
       this.isEditing = false;
-      this.successMessage = 'Đã cập nhật hồ sơ thành công!';
+      this.successMessage = 'Đã lưu hồ sơ thành công!';
       
       setTimeout(() => {
         this.successMessage = '';

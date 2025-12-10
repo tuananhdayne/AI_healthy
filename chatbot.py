@@ -199,7 +199,7 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         # Intent confidence cao → search RAG theo intent
         print(f"✅ Intent confidence cao ({intent_conf:.3f}), search RAG theo intent: {intent}")
         try:
-            docs = retriever.search_by_intent(intent, cleaned_input, k=3)
+            docs = retriever.search_by_intent(intent, cleaned_input, k=5)  # Tăng từ 3 lên 5 để có nhiều context hơn
             response["sources"] = docs
             
             # Tính confidence từ RAG results
@@ -213,7 +213,7 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
             use_rag = True
         except Exception as e:
             print(f"⚠️ Lỗi khi search RAG theo intent: {e}, fallback về search thông thường")
-            docs = retriever.search(cleaned_input, k=3)
+            docs = retriever.search(cleaned_input, k=5)  # Tăng từ 3 lên 5
             response["sources"] = docs
             context = "\n".join([d["text"] for d in docs]) if docs else ""
             use_rag = True
@@ -225,7 +225,7 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         use_rag = False
     else:
         # Trường hợp khác: search RAG thông thường
-        docs = retriever.search(cleaned_input, k=3)
+        docs = retriever.search(cleaned_input, k=5)  # Tăng từ 3 lên 5 để có nhiều context hơn
         response["sources"] = docs
         
         # Tính confidence từ RAG results
