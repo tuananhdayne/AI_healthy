@@ -40,39 +40,31 @@ def initialize_firestore():
                 try:
                     cred = credentials.Certificate(service_account_path)
                     firebase_admin.initialize_app(cred, {
-                        'projectId': 'giadienweb'  # Sử dụng project ID của dự án
+                        'projectId': 'giadienweb'
                     })
-                    print("✅ Firebase Admin đã khởi tạo với service account key (project: giadienweb)")
                 except AttributeError as attr_error:
                     # Xử lý lỗi DEFAULT_UNIVERSE_DOMAIN
                     if "DEFAULT_UNIVERSE_DOMAIN" in str(attr_error):
-                        print("⚠️ Gặp lỗi version compatibility, thử cách khác...")
-                        # Thử với monkey patch để fix lỗi
                         try:
                             import google.auth.credentials
                             if not hasattr(google.auth.credentials, 'DEFAULT_UNIVERSE_DOMAIN'):
                                 google.auth.credentials.DEFAULT_UNIVERSE_DOMAIN = 'googleapis.com'
                         except:
                             pass
-                        # Thử lại
                         cred = credentials.Certificate(service_account_path)
                         firebase_admin.initialize_app(cred, {
                             'projectId': 'giadienweb'
                         })
-                        print("✅ Firebase Admin đã khởi tạo với service account key (project: giadienweb) - sau khi fix compatibility")
                     else:
                         raise
             else:
                 # Sử dụng default credentials với project ID cụ thể
                 try:
                     firebase_admin.initialize_app(options={
-                        'projectId': 'giadienweb'  # Sử dụng project ID của dự án
+                        'projectId': 'giadienweb'
                     })
-                    print("✅ Firebase Admin đã khởi tạo với default credentials (project: giadienweb)")
                 except AttributeError as attr_error:
-                    # Xử lý lỗi DEFAULT_UNIVERSE_DOMAIN
                     if "DEFAULT_UNIVERSE_DOMAIN" in str(attr_error):
-                        print("⚠️ Gặp lỗi version compatibility, thử cách khác...")
                         try:
                             import google.auth.credentials
                             if not hasattr(google.auth.credentials, 'DEFAULT_UNIVERSE_DOMAIN'):
@@ -82,17 +74,14 @@ def initialize_firestore():
                         firebase_admin.initialize_app(options={
                             'projectId': 'giadienweb'
                         })
-                        print("✅ Firebase Admin đã khởi tạo với default credentials (project: giadienweb) - sau khi fix compatibility")
                     else:
                         raise
-                except Exception as default_error:
+                except Exception:
                     # Nếu không có default credentials, thử không chỉ định project
                     try:
                         firebase_admin.initialize_app()
-                        print("✅ Firebase Admin đã khởi tạo (sử dụng default project)")
                     except AttributeError as attr_error:
                         if "DEFAULT_UNIVERSE_DOMAIN" in str(attr_error):
-                            print("⚠️ Gặp lỗi version compatibility, thử cách khác...")
                             try:
                                 import google.auth.credentials
                                 if not hasattr(google.auth.credentials, 'DEFAULT_UNIVERSE_DOMAIN'):
@@ -100,25 +89,14 @@ def initialize_firestore():
                             except:
                                 pass
                             firebase_admin.initialize_app()
-                            print("✅ Firebase Admin đã khởi tạo (sử dụng default project) - sau khi fix compatibility")
                         else:
                             raise
         
         _db = firestore.client()
-        print("✅ Firestore client đã sẵn sàng (project: giadienweb)")
         return _db
         
-    except Exception as e:
-        error_msg = str(e)
-        if "DEFAULT_UNIVERSE_DOMAIN" in error_msg:
-            print(f"⚠️ Lỗi version compatibility với google-auth: {error_msg}")
-            print("   💡 Thử chạy: pip install --upgrade google-auth google-auth-httplib2")
-        else:
-            print(f"⚠️ Không thể khởi tạo Firestore: {e}")
-        print("   Hệ thống vẫn hoạt động nhưng không lưu vào Firestore")
-        print("   💡 Gợi ý: Tạo service account key từ Firebase Console và đặt tên 'serviceAccountKey.json'")
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        # Frontend đã lưu trực tiếp, backend không cần Firestore
         return None
 
 
@@ -169,12 +147,9 @@ def save_chat_message(
         
         doc_ref = db.collection("messages").add(message_data)
         message_id = doc_ref[1].id
-        
-        print(f"💾 Đã lưu message vào Firestore: {message_id[:8]}...")
         return message_id
         
-    except Exception as e:
-        print(f"❌ Lỗi khi lưu message vào Firestore: {e}")
+    except Exception:
         return None
 
 
@@ -212,17 +187,14 @@ def save_chat_session(
             # Cập nhật session hiện có
             doc_ref = docs[0].reference
             doc_ref.update(session_data)
-            print(f"💾 Đã cập nhật session trong Firestore: {session_id[:8]}...")
         else:
             # Tạo session mới
             session_data["createdAt"] = firestore.SERVER_TIMESTAMP
-            doc_ref = sessions_ref.add(session_data)
-            print(f"💾 Đã tạo session mới trong Firestore: {session_id[:8]}...")
+            sessions_ref.add(session_data)
         
         return session_id
         
-    except Exception as e:
-        print(f"❌ Lỗi khi lưu session vào Firestore: {e}")
+    except Exception:
         return None
 
 
@@ -293,11 +265,9 @@ def save_medicine_reminder(reminder_data: Dict[str, Any]) -> Optional[str]:
             doc_ref = db.collection("medicineReminders").add(firestore_data)
             reminder_id = doc_ref[1].id
         
-        print(f"💾 Đã lưu medicine reminder vào Firestore: {reminder_id[:8]}...")
         return reminder_id
         
-    except Exception as e:
-        print(f"❌ Lỗi khi lưu medicine reminder vào Firestore: {e}")
+    except Exception:
         return None
 
 
@@ -320,8 +290,7 @@ def get_medicine_reminders(user_id: str) -> List[Dict[str, Any]]:
         
         return reminders
         
-    except Exception as e:
-        print(f"❌ Lỗi khi lấy medicine reminders từ Firestore: {e}")
+    except Exception:
         return []
 
 
@@ -348,10 +317,7 @@ def get_health_profile(user_id: str) -> Optional[Dict[str, Any]]:
                 'gioiTinh': data.get('gioiTinh', 'khac')
             }
         return None
-    except Exception as e:
-        print(f"❌ Lỗi khi lấy health profile: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
         return None
 
 def delete_medicine_reminder(reminder_id: str) -> bool:
@@ -363,11 +329,8 @@ def delete_medicine_reminder(reminder_id: str) -> bool:
         
         doc_ref = db.collection("medicineReminders").document(reminder_id)
         doc_ref.update({"isActive": False})
-        
-        print(f"💾 Đã xóa medicine reminder trong Firestore: {reminder_id[:8]}...")
         return True
         
-    except Exception as e:
-        print(f"❌ Lỗi khi xóa medicine reminder từ Firestore: {e}")
+    except Exception:
         return False
 
