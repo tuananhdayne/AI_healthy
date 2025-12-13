@@ -6,7 +6,16 @@ from typing import Any, Dict, Optional
 from intent.intent_classifier import IntentClassifier
 from rag.retriever import Retriever
 from generator.gemini_generator import generate_medical_answer
-from app.response_layer import need_more_info, build_clarification_question
+from app.response_layer import (
+    need_more_info, 
+    build_clarification_question,
+    is_follow_up,
+    is_topic_shift,
+    parse_switch_confirm,
+    get_intent_label,
+    get_intent_category,
+    get_rag_gate_thresholds
+)
 from app.symptom_extractor import extract_symptoms
 from app.risk_estimator import estimate_risk
 
@@ -77,7 +86,11 @@ def _get_or_create_state(session_id: str) -> Dict[str, Any]:
             conversation_states[session_id] = {
                 "last_intent": None,
                 "last_symptoms": None,
-                "conversation_history": []  # Lưu lịch sử hội thoại (tối đa 5 cặp Q&A gần nhất)
+                "conversation_history": [],  # Lưu lịch sử hội thoại (tối đa 6 cặp Q&A gần nhất)
+                "intent_lock": None,  # { "intent": str, "turns": int } | None
+                "pending_intent": None,  # Intent mới đang chờ xác nhận
+                "pending_from_intent": None,  # Intent cũ
+                "pending_type": None  # "intent_switch_confirm" | None
             }
         return conversation_states[session_id]
 
@@ -113,50 +126,250 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         }
 
     state = _get_or_create_state(session_id)
-
-    # 1) Intent
-    intent, intent_conf = intent_classifier.predict_with_conf(cleaned_input)
-    print(f"🧠 Intent: {intent} | conf={intent_conf:.2f}")
-
-    # 2) Symptom Extraction
-    symptoms = extract_symptoms(cleaned_input)
-    risk = estimate_risk(symptoms)
-
-    # 3) Lưu vào memory
-    state["last_intent"] = intent
-    state["last_symptoms"] = symptoms
-    state["last_user_input"] = cleaned_input
     
     # Lưu user input vào conversation history ngay (trước khi generate reply)
     history_list = state.get("conversation_history", [])
-    # Lưu user input với bot reply = None (sẽ cập nhật sau)
     history_list.append((cleaned_input, None))
     state["conversation_history"] = history_list
-
+    
+    # Khởi tạo response template
     response: Dict[str, Any] = {
         "session_id": session_id,
-        "intent": intent,
-        "intent_confidence": float(intent_conf),
-        "symptoms": symptoms,
-        "risk": risk,
+        "intent": None,
+        "intent_confidence": 0.0,
+        "symptoms": {},
+        "risk": None,
         "clarification_needed": False,
         "clarification_question": None,
         "sources": [],
         "stage": "generation"
     }
-
-    # 4) Người dùng nói tiếp các từ mơ hồ: "vẫn thế", "đỡ hơn rồi"
-    if cleaned_input.lower() in ["vẫn thế", "như hôm qua", "đỡ hơn", "nặng hơn"]:
-        last = state.get("last_symptoms")
-        if last:
-            response["reply"] = (
-                "💬 Bạn đang nói về triệu chứng trước đó. Bạn có thể mô tả thêm không? "
-                f"Mình ghi nhận lần trước là: {last}"
-            )
+    
+    # ============================
+    # ƯU TIÊN XỬ LÝ (Thứ tự bắt buộc)
+    # ============================
+    
+    last_intent = state.get("last_intent")
+    pending_type = state.get("pending_type")
+    
+    # ============================
+    # BƯỚC 1: PENDING FLOW (Nếu đang chờ xác nhận đổi chủ đề)
+    # ============================
+    pending_intent_before = state.get("pending_intent")
+    rag_mode = None  # Khởi tạo để dùng trong log (sẽ được set sau)
+    
+    if pending_type == "intent_switch_confirm":
+        pending_intent = state.get("pending_intent")
+        pending_from_intent = state.get("pending_from_intent")
+        
+        print(f"\n{'='*60}")
+        print(f"🔄 PENDING FLOW - Đang xử lý xác nhận đổi chủ đề")
+        print(f"   pending_intent (trước): {pending_intent}")
+        print(f"   pending_from_intent: {pending_from_intent}")
+        print(f"{'='*60}\n")
+        
+        # Parse câu trả lời xác nhận
+        confirm_result = parse_switch_confirm(cleaned_input)
+        
+        if confirm_result is True:
+            # Xác nhận chuyển sang chủ đề mới
+            intent = pending_intent
+            # Xóa pending fields
+            state.pop("pending_intent", None)
+            state.pop("pending_from_intent", None)
+            state.pop("pending_type", None)
+            print(f"✅ User xác nhận chuyển từ {pending_from_intent} sang {intent}")
+            # Tiếp tục xử lý với intent mới
+            
+        elif confirm_result is False:
+            # Giữ chủ đề cũ
+            intent = pending_from_intent
+            # Xóa pending fields
+            state.pop("pending_intent", None)
+            state.pop("pending_from_intent", None)
+            state.pop("pending_type", None)
+            print(f"✅ User giữ chủ đề cũ: {intent}")
+            # Tiếp tục xử lý với intent cũ
+            
         else:
-            response["reply"] = "Bạn mô tả triệu chứng hiện tại rõ hơn nhé!"
-        response["stage"] = "follow_up"
-        return response
+            # Không rõ → hỏi lại, không đổi intent, không RAG
+            from_intent_label = get_intent_label(pending_from_intent) if pending_from_intent else "chủ đề trước"
+            to_intent_label = get_intent_label(pending_intent) if pending_intent else "chủ đề mới"
+            response["reply"] = (
+                f"💬 Bạn muốn hỏi tiếp về {from_intent_label} hay chuyển sang {to_intent_label}? "
+                "Vui lòng trả lời rõ ràng (ví dụ: 'chuyển' hoặc 'giữ')."
+            )
+            response["stage"] = "pending_confirm"
+            
+            # Log trước khi return
+            print(f"\n{'='*60}")
+            print(f"📊 LOG SUMMARY")
+            print(f"   intent_new: {pending_intent} (pending)")
+            print(f"   conf_new: N/A (pending)")
+            print(f"   last_intent: {pending_from_intent}")
+            print(f"   final_intent: {pending_from_intent} (giữ cũ)")
+            print(f"   is_follow_up: False")
+            print(f"   is_topic_shift: False")
+            print(f"   pending_intent (trước): {pending_intent}")
+            print(f"   pending_intent (sau): {pending_intent} (giữ nguyên)")
+            print(f"   rag_intent: N/A (chưa xử lý)")
+            print(f"   rag_mode: None (chưa xử lý)")
+            print(f"   use_rag: False")
+            print(f"   stage: {response['stage']}")
+            print(f"{'='*60}\n")
+            
+            # Cập nhật conversation history với reply
+            if history_list and history_list[-1][1] is None:
+                history_list[-1] = (history_list[-1][0], response["reply"])
+            return response
+    
+    # ============================
+    # BƯỚC 2: INTENT CLASSIFICATION
+    # ============================
+    intent_new, intent_conf = intent_classifier.predict_with_conf(cleaned_input)
+    print(f"\n{'='*60}")
+    print(f"🧠 INTENT CLASSIFICATION")
+    print(f"   intent_new: {intent_new}")
+    print(f"   conf_new: {intent_conf:.3f}")
+    print(f"   last_intent: {last_intent}")
+    print(f"{'='*60}\n")
+    
+    # ============================
+    # BƯỚC 3: NHẬN DIỆN FOLLOW-UP & TOPIC SHIFT
+    # ============================
+    is_follow_up_flag = is_follow_up(cleaned_input)
+    is_topic_shift_flag = is_topic_shift(cleaned_input)
+    
+    print(f"📌 CONTEXT DETECTION")
+    print(f"   is_follow_up: {is_follow_up_flag}")
+    print(f"   is_topic_shift: {is_topic_shift_flag}\n")
+    
+    # ============================
+    # BƯỚC 4: TOPIC SHIFT RÕ (Cho phép đổi chủ đề)
+    # ============================
+    if is_topic_shift_flag and not is_follow_up_flag:
+        # Đổi chủ đề rõ → cho phép đổi
+        intent = intent_new
+        print(f"✅ Topic shift rõ → đổi intent sang: {intent}")
+        # Xóa intent lock nếu có (vì đổi chủ đề rõ)
+        state.pop("intent_lock", None)
+        
+    # ============================
+    # BƯỚC 5: FOLLOW-UP (Giữ chủ đề cũ)
+    # ============================
+    elif is_follow_up_flag and last_intent and not is_topic_shift_flag:
+        # Follow-up → ưu tiên tuyệt đối giữ intent cũ
+        intent = last_intent
+        print(f"✅ Follow-up detected → giữ intent cũ: {intent} (không dùng intent mới: {intent_new})")
+        
+    # ============================
+    # BƯỚC 6: INTENT LOCK (GPT-like stabilization)
+    # ============================
+    elif state.get("intent_lock"):
+        intent_lock = state["intent_lock"]
+        locked_intent = intent_lock.get("intent")
+        turns_left = intent_lock.get("turns", 0)
+        
+        if turns_left > 0 and not is_topic_shift_flag:
+            # Dùng intent lock
+            intent = locked_intent
+            intent_lock["turns"] = turns_left - 1
+            print(f"🔒 Intent lock active → dùng: {intent} (còn {turns_left - 1} lượt)")
+            if turns_left - 1 <= 0:
+                # Hết lượt lock → xóa
+                state.pop("intent_lock", None)
+        else:
+            # Hết lượt hoặc topic shift → dùng intent mới
+            intent = intent_new
+            state.pop("intent_lock", None)
+            
+    # ============================
+    # BƯỚC 7: PENDING INTENT (Tạo pending khi intent đổi nhưng mơ hồ)
+    # ============================
+    elif last_intent and intent_new != last_intent and not is_follow_up_flag and not is_topic_shift_flag:
+        # Intent đổi nhưng không rõ ràng → kiểm tra confidence
+        intent_conf_low = 0.85
+        intent_conf_high = 0.97
+        
+        if intent_conf_low <= intent_conf < intent_conf_high:
+            # Vùng xám → tạo pending
+            state["pending_intent"] = intent_new
+            state["pending_from_intent"] = last_intent
+            state["pending_type"] = "intent_switch_confirm"
+            
+            from_label = get_intent_label(last_intent)
+            to_label = get_intent_label(intent_new)
+            
+            response["reply"] = (
+                f"💬 Bạn đang muốn hỏi tiếp về {from_label} hay chuyển sang {to_label}? "
+                "Vui lòng trả lời rõ ràng."
+            )
+            response["stage"] = "intent_switch_confirm"
+            response["intent"] = last_intent  # Giữ intent cũ trong response
+            response["intent_confidence"] = float(intent_conf)
+            
+            # Log trước khi return
+            pending_intent_after = state.get("pending_intent")
+            print(f"\n{'='*60}")
+            print(f"📊 LOG SUMMARY - PENDING CREATED")
+            print(f"   intent_new: {intent_new}")
+            print(f"   conf_new: {intent_conf:.3f}")
+            print(f"   last_intent: {last_intent}")
+            print(f"   final_intent: {last_intent} (giữ cũ, chờ xác nhận)")
+            print(f"   is_follow_up: {is_follow_up_flag}")
+            print(f"   is_topic_shift: {is_topic_shift_flag}")
+            print(f"   pending_intent (trước): {pending_intent_before}")
+            print(f"   pending_intent (sau): {pending_intent_after}")
+            print(f"   rag_intent: N/A (không RAG khi pending)")
+            print(f"   rag_mode: None (không RAG khi pending)")
+            print(f"   use_rag: False")
+            print(f"   stage: {response['stage']}")
+            print(f"{'='*60}\n")
+            
+            # Không RAG, không generate câu trả lời chuyên môn
+            # Cập nhật conversation history với reply
+            if history_list and history_list[-1][1] is None:
+                history_list[-1] = (history_list[-1][0], response["reply"])
+            return response
+        else:
+            # Confidence quá thấp hoặc quá cao → dùng intent mới
+            intent = intent_new
+            
+    # ============================
+    # BƯỚC 8: BÌNH THƯỜNG (Dùng intent classifier)
+    # ============================
+    else:
+        intent = intent_new
+    
+    # Final intent decision
+    final_intent = intent
+    print(f"🎯 FINAL INTENT DECISION")
+    print(f"   final_intent: {final_intent}")
+    print(f"   (so với intent_new: {intent_new}, last_intent: {last_intent})\n")
+    
+    # ============================
+    # BƯỚC 9: INTENT LOCK (Set lock nếu confidence cao)
+    # ============================
+    if intent_conf >= 0.97 and intent not in ["other", "unknown"]:
+        state["intent_lock"] = {"intent": intent, "turns": 2}
+        print(f"🔒 Set intent lock: {intent} (2 lượt)\n")
+    
+    # ============================
+    # BƯỚC 10: SYMPTOM EXTRACTION & RISK
+    # ============================
+    symptoms = extract_symptoms(cleaned_input)
+    risk = estimate_risk(symptoms)
+    
+    # Lưu vào memory
+    state["last_intent"] = intent
+    state["last_symptoms"] = symptoms
+    state["last_user_input"] = cleaned_input
+    
+    # Cập nhật response
+    response["intent"] = intent
+    response["intent_confidence"] = float(intent_conf)
+    response["symptoms"] = symptoms
+    response["risk"] = risk
 
     # 5) RISK LAYER — phát hiện nguy hiểm
     if risk == "high":
@@ -186,57 +399,149 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         state["last_user_input_before_clarification"] = cleaned_input
         return response
 
-    # 7) RAG RETRIEVAL - Tìm thông tin trong database
-    # Logic mới: Nếu intent confidence >= 0.998 → search RAG theo intent
-    # Nếu intent là "other"/"unknown" hoặc confidence < 0.98 → dùng Gemini tự do
+    # ============================
+    # BƯỚC 11: RAG GUARD (Bắt buộc - Tránh RAG sai chủ đề)
+    # ============================
+    # Follow-up tuyệt đối không được search_by_intent(intent_new)
+    if is_follow_up_flag and last_intent:
+        rag_intent = last_intent  # Dùng intent cũ
+        print(f"🛡️ RAG Guard: Follow-up → dùng intent cũ cho RAG: {rag_intent}")
+    else:
+        rag_intent = intent  # Dùng intent hiện tại
     
+    print(f"\n📚 RAG GUARD")
+    print(f"   rag_intent: {rag_intent} (dùng cho RAG search)")
+    print(f"   (final_intent: {final_intent}, last_intent: {last_intent})\n")
+    
+    # ============================
+    # BƯỚC 12: RAG RETRIEVAL với Gate Logic theo loại Intent
+    # ============================
     use_rag = False
     context = ""
     docs = []
+    rag_mode = None  # "strong", "soft", hoặc None
     
-    # Kiểm tra intent confidence
-    if intent_conf >= 0.998 and intent not in ["other", "unknown"]:
-        # Intent confidence cao → search RAG theo intent
-        print(f"✅ Intent confidence cao ({intent_conf:.3f}), search RAG theo intent: {intent}")
+    # Phân loại intent để xác định ngưỡng
+    intent_category = get_intent_category(rag_intent)
+    strong_threshold, soft_threshold = get_rag_gate_thresholds(intent_category)
+    
+    print(f"\n📊 RAG GATE LOGIC")
+    print(f"   rag_intent: {rag_intent}")
+    print(f"   intent_category: {intent_category}")
+    print(f"   thresholds: STRONG >= {strong_threshold:.2f}, SOFT >= {soft_threshold:.2f}")
+    
+    # Kiểm tra intent có dùng RAG không
+    if intent_category == "no_rag":
+        # Intent không dùng RAG → luôn Gemini
+        print(f"❌ Intent '{rag_intent}' không dùng RAG → Gemini fallback")
+        response["sources"] = []
+        context = ""
+        use_rag = False
+    elif intent_conf >= 0.97 and rag_intent not in ["other", "unknown"]:
+        # HIGH: Intent confidence cao → RAG theo intent
+        print(f"✅ High gate: Intent confidence {intent_conf:.3f} >= 0.97, search RAG theo intent: {rag_intent}")
         try:
-            docs = retriever.search_by_intent(intent, cleaned_input, k=5)  # Tăng từ 3 lên 5 để có nhiều context hơn
+            # Lấy tối đa 5 documents (sẽ chọn số lượng sau dựa trên confidence)
+            docs = retriever.search_by_intent(rag_intent, cleaned_input, k=5)
             response["sources"] = docs
             
-            # Tính confidence từ RAG results
-            rag_confidence = docs[0]["confidence"] if docs else 0.0
-            rag_cosine = docs[0]["cosine"] if docs else -1.0
-            
-            print(f"📚 RAG Confidence: {rag_confidence:.3f} | Cosine: {rag_cosine:.3f}")
-            
-            # Xây dựng context từ RAG
-            context = "\n".join([d["text"] for d in docs]) if docs else ""
-            use_rag = True
+            if docs:
+                rag_confidence = docs[0].get("confidence", 0.0)
+                rag_cosine = docs[0].get("cosine", -1.0)
+                print(f"📚 RAG Confidence (top1): {rag_confidence:.3f} | Cosine: {rag_cosine:.3f}")
+                
+                # Áp dụng gate logic theo loại intent
+                if rag_confidence >= strong_threshold:
+                    # STRONG RAG: 3-5 đoạn
+                    num_docs = min(5, len(docs))
+                    context = "\n".join([d.get("text", "") for d in docs[:num_docs]])
+                    use_rag = True
+                    rag_mode = "strong"
+                    print(f"✅ STRONG RAG: {rag_confidence:.3f} >= {strong_threshold:.2f} → dùng {num_docs} đoạn")
+                elif rag_confidence >= soft_threshold:
+                    # SOFT RAG: 1-2 đoạn, chỉ tham khảo
+                    num_docs = min(2, len(docs))
+                    context = "\n".join([d.get("text", "") for d in docs[:num_docs]])
+                    use_rag = True
+                    rag_mode = "soft"
+                    print(f"🟡 SOFT RAG: {rag_confidence:.3f} >= {soft_threshold:.2f} → dùng {num_docs} đoạn (chỉ tham khảo)")
+                else:
+                    # NO RAG: Confidence quá thấp
+                    print(f"❌ NO RAG: {rag_confidence:.3f} < {soft_threshold:.2f} → Gemini fallback")
+                    use_rag = False
+                    context = ""
+                    rag_mode = None
+            else:
+                print("⚠️ RAG không trả về kết quả → fallback Gemini")
+                use_rag = False
+                context = ""
+                
         except Exception as e:
             print(f"⚠️ Lỗi khi search RAG theo intent: {e}, fallback về search thông thường")
-            docs = retriever.search(cleaned_input, k=5)  # Tăng từ 3 lên 5
-            response["sources"] = docs
-            context = "\n".join([d["text"] for d in docs]) if docs else ""
-            use_rag = True
-    elif intent in ["other", "unknown"] or intent_conf < 0.98:
-        # Intent là "other"/"unknown" hoặc confidence thấp → dùng Gemini tự do (không search RAG)
-        print(f"⚠️ Intent '{intent}' với confidence {intent_conf:.3f} < 0.98, dùng Gemini tự do")
-        response["sources"] = []
-        context = ""  # Không có context từ RAG
-        use_rag = False
+            try:
+                docs = retriever.search(cleaned_input, k=5)
+                response["sources"] = docs
+                if docs:
+                    rag_confidence = docs[0].get("confidence", 0.0)
+                    if rag_confidence >= strong_threshold:
+                        context = "\n".join([d.get("text", "") for d in docs[:5]])
+                        use_rag = True
+                        rag_mode = "strong"
+                    elif rag_confidence >= soft_threshold:
+                        context = "\n".join([d.get("text", "") for d in docs[:2]])
+                        use_rag = True
+                        rag_mode = "soft"
+                    else:
+                        use_rag = False
+                        context = ""
+                else:
+                    use_rag = False
+                    context = ""
+            except:
+                use_rag = False
+                context = ""
+                
+    elif 0.85 <= intent_conf < 0.97 and rag_intent not in ["other", "unknown"]:
+        # MID: Có thể RAG global nhẹ (nếu intent không đổi)
+        print(f"⚠️ Mid gate: Intent confidence {intent_conf:.3f} trong khoảng [0.85, 0.97)")
+        if intent_new == last_intent and intent_category != "no_rag":
+            # Intent không đổi → có thể RAG global
+            try:
+                docs = retriever.search(cleaned_input, k=3)
+                response["sources"] = docs
+                if docs:
+                    rag_confidence = docs[0].get("confidence", 0.0)
+                    if rag_confidence >= soft_threshold:
+                        # Chỉ dùng SOFT RAG khi mid gate
+                        num_docs = min(2, len(docs))
+                        context = "\n".join([d.get("text", "") for d in docs[:num_docs]])
+                        use_rag = True
+                        rag_mode = "soft"
+                        print(f"🟡 Mid gate: SOFT RAG global với confidence {rag_confidence:.3f} ({num_docs} đoạn)")
+                    else:
+                        use_rag = False
+                        context = ""
+                else:
+                    use_rag = False
+                    context = ""
+            except:
+                use_rag = False
+                context = ""
+        else:
+            # Intent đổi hoặc no_rag → không RAG
+            print("⚠️ Mid gate: Intent đổi hoặc no_rag → không RAG, để Gemini/clarify xử lý")
+            use_rag = False
+            context = ""
+            
     else:
-        # Trường hợp khác: search RAG thông thường
-        docs = retriever.search(cleaned_input, k=5)  # Tăng từ 3 lên 5 để có nhiều context hơn
-        response["sources"] = docs
-        
-        # Tính confidence từ RAG results
-        rag_confidence = docs[0]["confidence"] if docs else 0.0
-        rag_cosine = docs[0]["cosine"] if docs else -1.0
-        
-        print(f"📚 RAG Confidence: {rag_confidence:.3f} | Cosine: {rag_cosine:.3f}")
-        
-        # Xây dựng context từ RAG
-        context = "\n".join([d["text"] for d in docs]) if docs else ""
-        use_rag = True
+        # LOW: Gemini fallback
+        print(f"⚠️ Low gate: Intent '{rag_intent}' với confidence {intent_conf:.3f} < 0.85 hoặc other/unknown → Gemini fallback")
+        response["sources"] = []
+        context = ""
+        use_rag = False
+    
+    print(f"   rag_mode: {rag_mode}")
+    print(f"   use_rag: {use_rag}\n")
 
     # 8) LẤY HEALTH PROFILE (nếu có user_id)
     health_profile_context = ""
@@ -305,15 +610,15 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
     # Mức 2: RAG confidence thấp (< 0.7) → Dùng Gemini
     # Mức 3: Risk cao hoặc không chắc chắn → Trả lời an toàn, khuyên gặp bác sĩ
     
-    # Xây dựng conversation history để bot nhớ ngữ cảnh (giống GPT - nhớ nhiều vòng hội thoại)
+    # ============================
+    # BƯỚC 13: XÂY DỰNG CONVERSATION HISTORY (GPT-like context)
+    # ============================
     conversation_history = None
-    is_follow_up = False
     
-    # Lấy lịch sử hội thoại từ state (tối đa 5 cặp Q&A gần nhất)
+    # Lấy lịch sử hội thoại từ state (tối đa 6 cặp Q&A gần nhất)
     history_list = state.get("conversation_history", [])
     
     # Lọc bỏ entry cuối cùng nếu chưa có reply (đó là câu hỏi hiện tại)
-    # Chỉ lấy các cặp Q&A đã hoàn chỉnh
     complete_history = [(q, a) for q, a in history_list if a is not None]
     
     # Debug: In ra conversation history để kiểm tra
@@ -325,7 +630,6 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
     # Kiểm tra xem có phải câu trả lời tiếp theo sau clarification không
     last_clarification_question = state.get("last_clarification_question")
     last_user_input_before_clarification = state.get("last_user_input_before_clarification")
-    last_intent = state.get("last_intent")
     last_symptoms = state.get("last_symptoms")
     
     # Xây dựng conversation history từ nhiều nguồn
@@ -333,14 +637,12 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
     
     # 1. Nếu có clarification question trước đó
     if last_clarification_question and last_user_input_before_clarification:
-        is_follow_up = True
         history_parts.append("Lịch sử cuộc trò chuyện:")
         history_parts.append(f"👤 Người dùng: \"{last_user_input_before_clarification}\"")
         history_parts.append(f"🤖 Bạn: \"{last_clarification_question}\"")
         history_parts.append(f"\n👉 Bây giờ người dùng trả lời: \"{cleaned_input}\"")
     # 2. Nếu có lịch sử hội thoại từ các lần trước (Q&A đã hoàn chỉnh)
     elif complete_history:
-        is_follow_up = True
         history_parts.append("Lịch sử cuộc trò chuyện trước đó:")
         # Lấy 4-5 cặp gần nhất để có đủ ngữ cảnh
         for i, (q, a) in enumerate(complete_history[-5:], 1):
@@ -349,7 +651,6 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
         history_parts.append(f"\n👉 Bây giờ người dùng hỏi: \"{cleaned_input}\"")
     # 3. Nếu có thông tin từ lần trước (intent, symptoms) nhưng chưa có history đầy đủ
     elif last_intent and last_symptoms and not complete_history:
-        is_follow_up = True
         history_parts.append("Thông tin từ cuộc trò chuyện trước:")
         history_parts.append(f"👤 Người dùng đã mô tả về: {last_intent}")
         if last_symptoms.get("location"):
@@ -360,7 +661,6 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
     
     if history_parts:
         conversation_history = "\n".join(history_parts)
-        is_follow_up = True  # Đảm bảo is_follow_up = True nếu có history
 
     # 9) THÊM HEALTH PROFILE CONTEXT VÀO CONTEXT (nếu có)
     if health_profile_context:
@@ -370,13 +670,84 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
         else:
             context = health_profile_context
 
-    # 11) PHÂN TẦNG TRẢ LỜI
-    # Logic mới: Nếu đã search RAG theo intent (confidence >= 0.998) → dùng RAG
-    # Nếu intent là "other"/"unknown" hoặc confidence < 0.98 → dùng Gemini tự do
+    # ============================
+    # BƯỚC 14: PHÂN TẦNG TRẢ LỜI (Response Layer)
+    # ============================
+    pending_intent_after = state.get("pending_intent")
     
+    # 6) CLARIFICATION LAYER — chỉ hỏi khi thực sự không rõ triệu chứng
+    if need_more_info(cleaned_input, intent):
+        question = build_clarification_question(intent)
+        response["reply"] = (
+            "💬 Để hiểu rõ hơn và trả lời chính xác, bạn cho mình biết thêm nhé:\n"
+            f"{question}"
+        )
+        response["clarification_needed"] = True
+        response["clarification_question"] = question
+        response["stage"] = "clarification"
+        # Lưu câu hỏi clarification vào state
+        state["last_clarification_question"] = question
+        state["last_user_input_before_clarification"] = cleaned_input
+        
+        # Log trước khi return
+        print(f"\n{'='*60}")
+        print(f"📊 LOG SUMMARY - CLARIFICATION")
+        print(f"   intent_new: {intent_new}")
+        print(f"   conf_new: {intent_conf:.3f}")
+        print(f"   last_intent: {last_intent}")
+        print(f"   final_intent: {final_intent}")
+        print(f"   is_follow_up: {is_follow_up_flag}")
+        print(f"   is_topic_shift: {is_topic_shift_flag}")
+        print(f"   pending_intent (trước): {pending_intent_before}")
+        print(f"   pending_intent (sau): {pending_intent_after}")
+        print(f"   rag_intent: N/A (chưa RAG)")
+        print(f"   rag_mode: None (chưa RAG)")
+        print(f"   use_rag: False")
+        print(f"   stage: {response['stage']}")
+        print(f"{'='*60}\n")
+        
+        # Cập nhật conversation history với reply
+        if history_list and history_list[-1][1] is None:
+            history_list[-1] = (history_list[-1][0], response["reply"])
+        return response
+    
+    # 5) RISK LAYER — phát hiện nguy hiểm
+    if risk == "high":
+        danger_signs = symptoms.get("danger_signs") or []
+        danger_text = ", ".join(danger_signs) if danger_signs else "dấu hiệu nguy hiểm"
+        response["reply"] = (
+            "⚠️ Mình phát hiện có dấu hiệu nguy hiểm như: "
+            + danger_text
+            + ". Bạn nên đi khám bác sĩ càng sớm càng tốt để đảm bảo an toàn."
+        )
+        response["stage"] = "safety"
+        
+        # Log trước khi return
+        print(f"\n{'='*60}")
+        print(f"📊 LOG SUMMARY - RISK HIGH")
+        print(f"   intent_new: {intent_new}")
+        print(f"   conf_new: {intent_conf:.3f}")
+        print(f"   last_intent: {last_intent}")
+        print(f"   final_intent: {final_intent}")
+        print(f"   is_follow_up: {is_follow_up_flag}")
+        print(f"   is_topic_shift: {is_topic_shift_flag}")
+        print(f"   pending_intent (trước): {pending_intent_before}")
+        print(f"   pending_intent (sau): {pending_intent_after}")
+        print(f"   rag_intent: N/A (không RAG khi risk high)")
+        print(f"   rag_mode: None (không RAG khi risk high)")
+        print(f"   use_rag: False")
+        print(f"   stage: {response['stage']}")
+        print(f"{'='*60}\n")
+        
+        # Cập nhật conversation history với reply
+        if history_list and history_list[-1][1] is None:
+            history_list[-1] = (history_list[-1][0], response["reply"])
+        return response
+    
+    # Generate answer với RAG hoặc Gemini
     if use_rag and context:
-        # Đã search RAG theo intent → trả lời dựa vào RAG
-        rag_confidence = docs[0]["confidence"] if docs else 0.0
+        # Dùng RAG với context
+        rag_confidence = docs[0].get("confidence", 0.0) if docs else 0.0
         print(f"✅ Dùng RAG với confidence: {rag_confidence:.3f}")
         response["stage"] = "rag_high_confidence"
         response["reply"] = generate_medical_answer(
@@ -384,11 +755,11 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
             user_question=cleaned_input,
             intent=intent,
             conversation_history=conversation_history,
-            is_follow_up=is_follow_up,
+            is_follow_up=is_follow_up_flag,
             use_rag_priority=True  # Ưu tiên sử dụng RAG context
         )
     else:
-        # Intent là "other"/"unknown" hoặc confidence < 0.98 → dùng Gemini tự do
+        # Dùng Gemini tự do (không có RAG context)
         print("⚠️ Dùng Gemini tự do (không có RAG context)")
         response["stage"] = "gemini_fallback"
         response["reply"] = generate_medical_answer(
@@ -396,9 +767,28 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
             user_question=cleaned_input,
             intent=intent,
             conversation_history=conversation_history,
-            is_follow_up=is_follow_up,
+            is_follow_up=is_follow_up_flag,
             use_rag_priority=False  # Không ưu tiên RAG, để Gemini tự do
         )
+    
+    # ============================
+    # LOG SUMMARY (In ra tất cả thông tin cần thiết) - MỖI LƯỢT
+    # ============================
+    print(f"\n{'='*60}")
+    print(f"📊 LOG SUMMARY - MỖI LƯỢT")
+    print(f"   intent_new: {intent_new}")
+    print(f"   conf_new: {intent_conf:.3f}")
+    print(f"   last_intent: {last_intent}")
+    print(f"   final_intent: {final_intent}")
+    print(f"   is_follow_up: {is_follow_up_flag}")
+    print(f"   is_topic_shift: {is_topic_shift_flag}")
+    print(f"   pending_intent (trước): {pending_intent_before}")
+    print(f"   pending_intent (sau): {pending_intent_after}")
+    print(f"   rag_intent: {rag_intent}")
+    print(f"   rag_mode: {rag_mode} (strong/soft/None)")
+    print(f"   use_rag: {use_rag}")
+    print(f"   stage: {response.get('stage', 'unknown')}")
+    print(f"{'='*60}\n")
     
     # Mức nữa: Nếu risk cao hoặc intent confidence thấp → Trả lời an toàn
     if risk == "high" or (intent_conf < 0.5 and response["stage"] not in ["safety", "rag_high_confidence"]):
@@ -432,7 +822,7 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
         state["conversation_history"] = history_list
     
     # Xóa clarification question sau khi đã trả lời
-    if is_follow_up and "last_clarification_question" in state:
+    if is_follow_up_flag and "last_clarification_question" in state:
         state.pop("last_clarification_question", None)
         state.pop("last_user_input_before_clarification", None)
     

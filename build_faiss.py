@@ -1,4 +1,5 @@
 import os
+import re
 import pickle
 import faiss
 from sentence_transformers import SentenceTransformer
@@ -23,8 +24,7 @@ INTENT_FILES = {
     "lo_lang_stress": "lo_lang_stress.txt",
     "tu_van_dinh_duong": "tu_van_dinh_duong.txt",
     "tu_van_tap_luyen": "tu_van_tap_luyen.txt",
-
-    # ❗ other KHÔNG có RAG → bỏ
+    # có thể thêm intent mới sau này
 }
 
 # ================================
@@ -33,20 +33,40 @@ INTENT_FILES = {
 print("🧠 Loading embedding model (Vietnamese-SBERT)...")
 embedder = SentenceTransformer("keepitreal/vietnamese-sbert")
 
-
 # ================================
-# 3) NORMALIZER (quan trọng)
+# 3) NORMALIZER
 # ================================
-def normalize_text(text):
+def normalize_text(text: str) -> str:
     text = text.strip()
     text = " ".join(text.split())
     return text
 
+# ================================
+# 4) LOAD DATA THEO ĐOẠN (RẤT QUAN TRỌNG)
+# ================================
+def load_paragraphs(path: str):
+    """
+    Mỗi đoạn (paragraph) = 1 tình huống = 1 embedding
+    Chấp nhận:
+    - 1 đoạn = 1 dòng
+    - 1 đoạn = nhiều dòng
+    Miễn là cách nhau bằng dòng trống
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        raw_text = f.read()
+
+    paragraphs = [
+        normalize_text(p)
+        for p in re.split(r"\n\s*\n", raw_text)
+        if p.strip()
+    ]
+
+    return paragraphs
 
 # ================================
-# 4) BUILD FAISS FOR EACH INTENT
+# 5) BUILD FAISS FOR EACH INTENT
 # ================================
-def build_for_intent(intent, filename):
+def build_for_intent(intent: str, filename: str):
     print(f"\n============================")
     print(f"🔍 Building FAISS for intent: {intent}")
     print(f"📄 File: {filename}")
@@ -57,26 +77,35 @@ def build_for_intent(intent, filename):
         print("⚠ File không tồn tại → bỏ qua")
         return
 
-    with open(path, "r", encoding="utf-8") as f:
-        docs = [normalize_text(l) for l in f.readlines() if l.strip()]
+    docs = load_paragraphs(path)
+    n_docs = len(docs)
 
-    print(f"📌 {len(docs)} đoạn văn")
+    print(f"📌 Số đoạn load được: {n_docs}")
 
-    # Encode
+    # Cảnh báo format
+    if n_docs < 50:
+        print("⚠️ CẢNH BÁO: số đoạn quá ít → có thể file bị dính đoạn!")
+
+    # ================================
+    # ENCODE
+    # ================================
     embeddings = embedder.encode(
         docs,
         batch_size=64,
         convert_to_numpy=True,
         show_progress_bar=True,
-        normalize_embeddings=True  # QUAN TRỌNG! vector chuẩn hơn
+        normalize_embeddings=True  # BẮT BUỘC cho cosine
     )
 
     dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)   # DÙNG cosine similarity
 
+    # Dùng Inner Product vì vector đã normalize
+    index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
 
-    # Save
+    # ================================
+    # SAVE
+    # ================================
     index_path = os.path.join(EMB_DIR, f"{intent}_index.faiss")
     docs_path = os.path.join(EMB_DIR, f"{intent}_docs.pkl")
 
@@ -85,12 +114,11 @@ def build_for_intent(intent, filename):
     with open(docs_path, "wb") as f:
         pickle.dump(docs, f)
 
-    print(f"✅ Saved index → {index_path}")
-    print(f"✅ Saved docs  → {docs_path}")
-
+    print(f"✅ Saved FAISS index → {index_path}")
+    print(f"✅ Saved docs        → {docs_path}")
 
 # ================================
-# 5) RUN ALL INTENTS
+# 6) RUN ALL INTENTS
 # ================================
 for intent, filename in INTENT_FILES.items():
     build_for_intent(intent, filename)

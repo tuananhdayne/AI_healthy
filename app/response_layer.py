@@ -75,3 +75,203 @@ def build_clarification_question(intent: str):
     }
 
     return QUESTIONS.get(intent, "Bạn có thể mô tả rõ hơn tình trạng của bạn không?")
+
+
+# ============================
+# INTENT CONTINUITY & CONTEXT GUARD
+# ============================
+
+import re
+
+
+def get_intent_label(intent: str) -> str:
+    """
+    Map intent code sang label tiếng Việt dễ hiểu.
+    """
+    INTENT_LABELS = {
+        "bao_dau_bung": "đau bụng",
+        "bao_dau_dau": "đau đầu",
+        "bao_ho": "ho",
+        "bao_met_moi": "mệt mỏi",
+        "bao_sot": "sốt",
+        "lo_lang_stress": "lo lắng/stress",
+        "tu_van_dinh_duong": "tư vấn dinh dưỡng",
+        "tu_van_tap_luyen": "tư vấn tập luyện",
+        "chao_hoi": "chào hỏi",
+        "nhac_nho_uong_thuoc": "nhắc nhở uống thuốc",
+        "other": "chủ đề khác",
+        "unknown": "không xác định"
+    }
+    return INTENT_LABELS.get(intent, intent)
+
+
+def get_intent_category(intent: str) -> str:
+    """
+    Phân loại intent thành: "symptom", "advisory", "no_rag"
+    
+    Returns:
+        "symptom": Intent triệu chứng (an toàn cao, ngưỡng cao)
+        "advisory": Intent tư vấn (ít rủi ro, ngưỡng thấp)
+        "no_rag": Intent không dùng RAG (luôn Gemini)
+    """
+    # Intent triệu chứng (an toàn cao)
+    SYMPTOM_INTENTS = {
+        "bao_dau_dau",
+        "bao_dau_bung",
+        "bao_sot",
+        "bao_ho",
+        "bao_met_moi"
+    }
+    
+    # Intent tư vấn (ít rủi ro)
+    ADVISORY_INTENTS = {
+        "tu_van_dinh_duong",
+        "tu_van_tap_luyen"
+    }
+    
+    # Intent không dùng RAG
+    NO_RAG_INTENTS = {
+        "other",
+        "chao_hoi",
+        "unknown",
+        "lo_lang_stress",  # Có thể thêm vào đây nếu cần
+        "nhac_nho_uong_thuoc"  # Có thể thêm vào đây nếu cần
+    }
+    
+    if intent in SYMPTOM_INTENTS:
+        return "symptom"
+    elif intent in ADVISORY_INTENTS:
+        return "advisory"
+    elif intent in NO_RAG_INTENTS:
+        return "no_rag"
+    else:
+        # Default: coi như no_rag để an toàn
+        return "no_rag"
+
+
+def get_rag_gate_thresholds(intent_category: str) -> tuple[float, float]:
+    """
+    Trả về ngưỡng RAG gate dựa trên loại intent.
+    
+    Returns:
+        (strong_threshold, soft_threshold): 
+        - strong_threshold: Ngưỡng cho STRONG RAG (>= ngưỡng này)
+        - soft_threshold: Ngưỡng cho SOFT RAG (từ ngưỡng này đến strong_threshold)
+        - < soft_threshold: NO RAG
+    
+    Logic:
+        - symptom: (0.80, 0.70) - Ngưỡng cao vì an toàn
+        - advisory: (0.75, 0.65) - Ngưỡng thấp hơn vì ít rủi ro
+        - no_rag: (1.0, 1.0) - Luôn không dùng RAG
+    """
+    if intent_category == "symptom":
+        return (0.80, 0.70)  # STRONG >= 0.80, SOFT >= 0.70
+    elif intent_category == "advisory":
+        return (0.75, 0.65)  # STRONG >= 0.75, SOFT >= 0.65
+    else:  # no_rag
+        return (1.0, 1.0)  # Luôn không dùng RAG
+
+
+def is_follow_up(text: str) -> bool:
+    """
+    Nhận diện follow-up keywords (tiếp diễn, nói tiếp về chủ đề cũ).
+    Match theo ranh giới từ để tránh substring.
+    """
+    text_lower = text.lower().strip()
+    
+    # Follow-up keywords với ranh giới từ
+    follow_up_patterns = [
+        r'\bvẫn\b', r'\bvẫn thế\b', r'\bvẫn như thế\b',
+        r'\bnhư trước\b', r'\bnhư hôm qua\b', r'\bnhư lúc trước\b',
+        r'\bcòn\b', r'\bcòn bị\b', r'\bcòn thấy\b',
+        r'\bkèm\b', r'\bkèm theo\b', r'\bthêm\b',
+        r'\bhôm nay\b', r'\bsau đó\b',
+        r'\bđỡ hơn\b', r'\bđỡ rồi\b', r'\bnặng hơn\b', r'\btệ hơn\b',
+        r'\btăng lên\b', r'\bgiảm đi\b', r'\bgiảm xuống\b'
+    ]
+    
+    # Kiểm tra match theo pattern (ranh giới từ)
+    for pattern in follow_up_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    
+    return False
+
+
+def is_topic_shift(text: str) -> bool:
+    """
+    Nhận diện đổi chủ đề rõ ràng.
+    """
+    text_lower = text.lower().strip()
+    
+    # Topic shift keywords
+    topic_shift_patterns = [
+        r'\bcho hỏi\b', r'\bcho mình hỏi\b', r'\bcho tôi hỏi\b',
+        r'\bnhân tiện\b',
+        r'\bđổi chủ đề\b', r'\bvấn đề khác\b', r'\bcâu hỏi khác\b',
+        r'\bmuốn hỏi về\b', r'\bhỏi thêm về\b', r'\bxin tư vấn\b',
+        r'\bchuyển sang\b', r'\bđổi sang\b',
+        r'\btư vấn dinh dưỡng\b', r'\btư vấn tập luyện\b'
+    ]
+    
+    # Kiểm tra match theo pattern
+    for pattern in topic_shift_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    
+    # Xử lý đặc biệt: "ngoài ra" chỉ là topic shift nếu đi kèm các cụm rõ
+    if re.search(r'\bngoài ra\b', text_lower):
+        # Phải có các cụm rõ như "cho hỏi/nhân tiện/câu hỏi khác..."
+        clear_shift_with_ngoai_ra = [
+            r'\bcho hỏi\b', r'\bcho mình hỏi\b',
+            r'\bnhân tiện\b',
+            r'\bcâu hỏi khác\b', r'\bvấn đề khác\b'
+        ]
+        for pattern in clear_shift_with_ngoai_ra:
+            if re.search(pattern, text_lower):
+                return True
+        # Nếu chỉ có "ngoài ra" mà không có cụm rõ → không phải topic shift
+        return False
+    
+    return False
+
+
+def parse_switch_confirm(text: str) -> bool | None:
+    """
+    Parse câu trả lời xác nhận đổi chủ đề.
+    
+    Returns:
+        True: Xác nhận chuyển sang chủ đề mới
+        False: Giữ chủ đề cũ
+        None: Không rõ → cần hỏi lại
+    """
+    text_lower = text.lower().strip()
+    
+    # Xác nhận chuyển (True)
+    confirm_patterns = [
+        r'\bchuyển\b', r'\bđổi\b', r'\bđổi sang\b', r'\bchuyển sang\b',
+        r'\bđúng\b', r'\bđúng rồi\b', r'\bđúng vậy\b',
+        r'\bcó\b', r'\bcó đúng\b', r'\bphải\b', r'\bphải rồi\b',
+        r'\bchủ đề mới\b', r'\bchủ đề khác\b'
+    ]
+    
+    # Từ chối chuyển (False)
+    reject_patterns = [
+        r'\bkhông\b', r'\bkhông đúng\b', r'\bkhông phải\b',
+        r'\bvẫn\b', r'\bvẫn giữ\b', r'\bgiữ\b', r'\bgiữ nguyên\b',
+        r'\btiếp tục\b', r'\btiếp\b', r'\bvề\b', r'\bvề chủ đề cũ\b',
+        r'\bchủ đề cũ\b', r'\bchủ đề trước\b'
+    ]
+    
+    # Kiểm tra confirm
+    for pattern in confirm_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    
+    # Kiểm tra reject
+    for pattern in reject_patterns:
+        if re.search(pattern, text_lower):
+            return False
+    
+    # Không rõ
+    return None

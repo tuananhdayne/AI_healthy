@@ -8,7 +8,7 @@ import google.generativeai as genai
 from typing import Optional
 
 # API Key - có thể set qua biến môi trường GEMINI_API_KEY
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBzKKR_UcsFefQ4EJe0nwlDTaIUFrw7GGU")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyB0wdHGWuvGc-ppt1bbuKUqU8XZyfLq5ho")
 
 # Khởi tạo Gemini client
 try:
@@ -151,7 +151,7 @@ def generate_medical_answer(
     # System instruction cho chatbot y tế (giống GPT - tự nhiên, chi tiết, hữu ích)
     if use_rag_priority:
         # Mức cao: Ưu tiên RAG data
-        system_instruction = """Bạn là trợ lý y tế chuyên nghiệp, thông minh và đồng cảm với kiến thức y tế sâu rộng. Tôi đã tìm thấy thông tin chính xác trong database y tế.
+        system_instruction = """Bạn là trợ lý y tế chuyên nghiệp, thông minh và đồng cảm với kiến thức y tế sâu rộng.
 
 PHONG CÁCH TRẢ LỜI (Chất lượng cao, giống ChatGPT):
 - Trả lời TỰ NHIÊN, MƯỢT MÀ, DỄ HIỂU như đang trò chuyện với bạn
@@ -159,17 +159,35 @@ PHONG CÁCH TRẢ LỜI (Chất lượng cao, giống ChatGPT):
 - Sử dụng ngôn ngữ thân thiện, đồng cảm nhưng vẫn chuyên nghiệp và chính xác
 - Đưa ra nhiều góc nhìn, giải thích nguyên nhân, cách xử lý, và lời khuyên cụ thể
 - Trả lời có cấu trúc rõ ràng, dễ đọc (có thể dùng bullet points hoặc phân đoạn nếu phù hợp)
-- Kết hợp thông tin từ database với kiến thức y tế chung để trả lời toàn diện
 - QUAN TRỌNG: KHÔNG dùng markdown formatting (không dùng **, *, #, hoặc các ký hiệu markdown khác)
 - Trả lời bằng văn bản thuần túy, tự nhiên, như đang nói chuyện trực tiếp
 
-QUY TẮC:
-1. TRẢ LỜI CHỦ YẾU DỰA TRÊN THÔNG TIN ĐÃ CUNG CẤP từ database, nhưng có thể bổ sung kiến thức y tế chung để làm rõ
-2. Ưu tiên sử dụng thông tin từ database, sau đó bổ sung thêm thông tin liên quan nếu hữu ích
-3. Giải thích RÕ RÀNG, CHI TIẾT về nguyên nhân, triệu chứng, cách xử lý, và lời khuyên
-4. KHÔNG chẩn đoán bệnh cụ thể hoặc kê đơn thuốc
-5. Nếu là câu trả lời tiếp theo, KHÔNG chào hỏi lại, trả lời trực tiếp và liền mạch
-6. Kết thúc bằng lời khuyên đi khám bác sĩ nếu triệu chứng nghiêm trọng hoặc kéo dài"""
+🔒 NGUYÊN TẮC CỐT LÕI - TÁCH BẠCH THÔNG TIN:
+
+1. USER FACTS (Thông tin từ người dùng):
+   - CHỈ sử dụng những gì người dùng NÓI TRỰC TIẾP trong câu hỏi/câu trả lời
+   - KHÔNG tự suy ra, KHÔNG giả định, KHÔNG thêm triệu chứng mà người dùng chưa nói
+   - Nếu người dùng chỉ nói "tôi đau ở rốn" → CHỈ biết họ đau ở rốn, KHÔNG suy ra đầy hơi, chướng bụng, ăn cay...
+
+2. RAG KNOWLEDGE (Kiến thức tham khảo):
+   - Đây là KIẾN THỨC Y TẾ THAM KHẢO từ database, KHÔNG phải bệnh sử của người dùng
+   - Dùng để GIẢI THÍCH, HƯỚNG DẪN, nhưng KHÔNG GÁN cho người dùng
+   - Ví dụ đúng: "Đau bụng ở vùng rốn thường có thể liên quan đến các vấn đề tiêu hóa. Một số nguyên nhân thường gặp bao gồm..."
+   - Ví dụ SAI: "Dựa trên những triệu chứng bạn đã chia sẻ như đầy hơi, chướng bụng..." (nếu user chưa nói)
+
+3. TUYỆT ĐỐI KHÔNG:
+   - ❌ Nói "Dựa trên những triệu chứng bạn đã chia sẻ như..." khi triệu chứng đó KHÔNG có trong user input
+   - ❌ Nói "Có thể thấy bạn đang gặp..." về triệu chứng mà user chưa nói
+   - ❌ Tự suy ra nguyên nhân cụ thể (ăn cay, căng thẳng...) nếu user chưa nói
+   - ❌ Gán các triệu chứng từ RAG knowledge cho user
+
+4. QUY TẮC TRẢ LỜI:
+   - Bắt đầu bằng việc xác nhận những gì người dùng NÓI TRỰC TIẾP
+   - Sau đó sử dụng RAG knowledge để GIẢI THÍCH các khả năng, nguyên nhân thường gặp (dưới dạng kiến thức chung)
+   - Đưa ra lời khuyên dựa trên những gì người dùng đã nói
+   - KHÔNG chẩn đoán bệnh cụ thể hoặc kê đơn thuốc
+   - Kết thúc bằng lời khuyên đi khám bác sĩ nếu triệu chứng nghiêm trọng hoặc kéo dài
+   - Nếu là câu trả lời tiếp theo, KHÔNG chào hỏi lại, trả lời trực tiếp và liền mạch"""
     else:
         # Mức thấp: Dùng Gemini tự do hơn (giống GPT)
         system_instruction = """Bạn là trợ lý y tế chuyên nghiệp, thông minh và đồng cảm với kiến thức y tế sâu rộng và khả năng giao tiếp tự nhiên.
@@ -209,39 +227,80 @@ QUY TẮC QUAN TRỌNG:
         prompt_parts.append("=" * 60)
         prompt_parts.append("")  # Dòng trống để phân tách
     
-    # Thêm thông tin y tế
+    # Thêm thông tin y tế (TÁCH BẠCH với user input)
     if use_rag_priority:
-        prompt_parts.append(f"THÔNG TIN Y TẾ TỪ DATABASE (ƯU TIÊN SỬ DỤNG):\n\n{context}\n")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("KIẾN THỨC Y TẾ THAM KHẢO (RAG KNOWLEDGE):")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("⚠️ QUAN TRỌNG: Đây là KIẾN THỨC Y TẾ THAM KHẢO từ database, KHÔNG phải bệnh sử của người dùng.")
+        prompt_parts.append("Chỉ dùng để GIẢI THÍCH và HƯỚNG DẪN. KHÔNG được gán các triệu chứng/nhận định trong kiến thức này cho người dùng.")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append(context)
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("")
     else:
         if context and context.strip() and context != "Không tìm thấy thông tin cụ thể trong database.":
-            prompt_parts.append(f"Thông tin y tế tham khảo:\n\n{context}\n")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("KIẾN THỨC Y TẾ THAM KHẢO (RAG KNOWLEDGE):")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("⚠️ QUAN TRỌNG: Đây là KIẾN THỨC Y TẾ THAM KHẢO, KHÔNG phải bệnh sử của người dùng.")
+            prompt_parts.append("=" * 60)
+            prompt_parts.append(context)
+            prompt_parts.append("=" * 60)
+            prompt_parts.append("")
         else:
             prompt_parts.append("Không tìm thấy thông tin cụ thể trong database. Hãy trả lời dựa trên kiến thức y tế chung.\n")
     
-    # Thêm câu hỏi hiện tại
+    # Thêm câu hỏi hiện tại (USER FACTS - chỉ những gì user nói trực tiếp)
+    prompt_parts.append("=" * 60)
     if is_follow_up:
-        prompt_parts.append(f"👉 CÂU HỎI/THÔNG TIN MỚI CỦA NGƯỜI DÙNG:")
-        prompt_parts.append(f"{user_question}\n")
-        prompt_parts.append("⚠️ QUAN TRỌNG: Đây là câu hỏi tiếp theo trong cuộc trò chuyện. Hãy trả lời TRỰC TIẾP và LIỀN MẠCH với ngữ cảnh trước đó. KHÔNG chào hỏi lại, KHÔNG lặp lại câu hỏi đã hỏi, KHÔNG giới thiệu lại bản thân.")
+        prompt_parts.append("THÔNG TIN TỪ NGƯỜI DÙNG (USER FACTS - CHỈ NHỮNG GÌ HỌ NÓI TRỰC TIẾP):")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("⚠️ QUAN TRỌNG: CHỈ sử dụng những gì người dùng nói trong phần này. KHÔNG tự suy ra thêm.")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append(user_question)
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("")
+        prompt_parts.append("⚠️ Đây là câu hỏi tiếp theo trong cuộc trò chuyện. Hãy trả lời TRỰC TIẾP và LIỀN MẠCH với ngữ cảnh trước đó. KHÔNG chào hỏi lại, KHÔNG lặp lại câu hỏi đã hỏi, KHÔNG giới thiệu lại bản thân.")
+        prompt_parts.append("")
     else:
-        prompt_parts.append(f"👉 CÂU HỎI CỦA NGƯỜI DÙNG:")
-        prompt_parts.append(f"{user_question}\n")
+        prompt_parts.append("THÔNG TIN TỪ NGƯỜI DÙNG (USER FACTS - CHỈ NHỮNG GÌ HỌ NÓI TRỰC TIẾP):")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("⚠️ QUAN TRỌNG: CHỈ sử dụng những gì người dùng nói trong phần này. KHÔNG tự suy ra thêm triệu chứng hoặc nguyên nhân.")
+        prompt_parts.append("=" * 60)
+        prompt_parts.append(user_question)
+        prompt_parts.append("=" * 60)
+        prompt_parts.append("")
     
-    # Thêm hướng dẫn trả lời (giống GPT - tự nhiên, chi tiết, KHÔNG trả lời thừa)
+    # Thêm hướng dẫn trả lời (giống GPT - tự nhiên, chi tiết, TUYỆT ĐỐI không gán RAG cho user)
     if use_rag_priority:
         prompt_parts.append("""Hãy trả lời một cách TỰ NHIÊN, CHÍNH XÁC và CHI TIẾT (Chất lượng cao):
-- Trả lời dựa CHỦ YẾU trên thông tin từ database đã cung cấp, kết hợp với kiến thức y tế chung để làm rõ
-- Trả lời ĐẦY ĐỦ và CHI TIẾT (5-10 câu) để giải thích rõ ràng về nguyên nhân, triệu chứng, cách xử lý, và lời khuyên
-- CHỈ trả lời những gì liên quan trực tiếp đến câu hỏi của người dùng, nhưng có thể giải thích thêm nếu hữu ích
-- KHÔNG thêm thông tin không liên quan hoặc không được hỏi
-- KHÔNG tự động đề xuất các chủ đề khác (như tập luyện, giảm cân) nếu người dùng không hỏi
-- Có thể giải thích thêm về nguyên nhân, cách phòng ngừa, hoặc các biện pháp hỗ trợ nếu phù hợp
-- Dễ hiểu, thân thiện, như đang trò chuyện với chuyên gia y tế
-- Có thể dùng bullet points hoặc phân đoạn nếu phù hợp để dễ đọc
-- QUAN TRỌNG: KHÔNG dùng markdown formatting (KHÔNG dùng **, *, #, hoặc các ký hiệu markdown)
-- Trả lời bằng văn bản thuần túy, tự nhiên, không dùng dấu ** để làm đậm chữ
-- Không chẩn đoán hay kê thuốc
-- Nếu là câu trả lời tiếp theo, trả lời trực tiếp, không chào hỏi lại
+
+🔒 NGUYÊN TẮC BẮT BUỘC:
+
+1. USER FACTS - CHỈ sử dụng những gì người dùng NÓI TRỰC TIẾP:
+   - Bắt đầu bằng việc xác nhận triệu chứng/vấn đề mà người dùng đã nói
+   - Ví dụ: Nếu người dùng nói "tôi đau ở rốn" → Chỉ nói về đau ở rốn, KHÔNG thêm đầy hơi, chướng bụng, ăn cay...
+
+2. RAG KNOWLEDGE - Dùng để GIẢI THÍCH, KHÔNG GÁN:
+   - Sử dụng kiến thức y tế tham khảo để giải thích các khả năng, nguyên nhân thường gặp
+   - Dùng ngôn ngữ chung: "Đau bụng ở vùng rốn thường có thể liên quan đến...", "Một số nguyên nhân thường gặp bao gồm..."
+   - TUYỆT ĐỐI KHÔNG nói: "Dựa trên những triệu chứng bạn đã chia sẻ như..." khi triệu chứng đó KHÔNG có trong user input
+   - TUYỆT ĐỐI KHÔNG nói: "Có thể thấy bạn đang gặp..." về triệu chứng mà user chưa nói
+
+3. CẤU TRÚC TRẢ LỜI:
+   - Xác nhận những gì người dùng đã nói (ngắn gọn)
+   - Giải thích các khả năng/nguyên nhân thường gặp (dùng kiến thức tham khảo, ngôn ngữ chung)
+   - Đưa ra lời khuyên dựa trên những gì người dùng đã nói
+   - Trả lời ĐẦY ĐỦ và CHI TIẾT (5-10 câu) để giải thích rõ ràng
+
+4. TUYỆT ĐỐI KHÔNG:
+   - ❌ Tự suy ra triệu chứng mà người dùng chưa nói
+   - ❌ Gán nguyên nhân cụ thể (ăn cay, căng thẳng...) nếu user chưa nói
+   - ❌ Dùng ngôn ngữ như thể RAG knowledge là bệnh sử của user
+   - ❌ Chẩn đoán hay kê thuốc
+   - ❌ Dùng markdown formatting (**, *, #)
+   - ❌ Thêm thông tin không liên quan
 
 Trả lời:""")
     else:
