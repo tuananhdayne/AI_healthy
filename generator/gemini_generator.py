@@ -8,7 +8,9 @@ import google.generativeai as genai
 from typing import Optional
 
 # API Key - có thể set qua biến môi trường GEMINI_API_KEY
+
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_API_key")
+
 
 # Khởi tạo Gemini client
 try:
