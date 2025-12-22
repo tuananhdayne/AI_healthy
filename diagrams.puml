@@ -1,0 +1,532 @@
+' ============================================
+' BIỂU ĐỒ CHO DỰ ÁN CHATBOT Y TẾ
+' Sử dụng với PlantUML hoặc StarUML
+' ============================================
+
+@startuml UseCaseDiagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam actor {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 12
+}
+skinparam usecase {
+    BackgroundColor #F0F0F0
+    BorderColor #333333
+    FontSize 11
+}
+skinparam rectangle {
+    BackgroundColor #FFFFFF
+    BorderColor #0066CC
+}
+
+title Biểu đồ Use Case - Chatbot Y Tế
+
+actor "Người dùng" as User
+actor "Quản trị viên" as Admin
+actor "Hệ thống" as System
+
+rectangle "Chatbot Y Tế" {
+    usecase "Chat với AI" as UC1
+    usecase "Đăng ký/Đăng nhập" as UC2
+    usecase "Quản lý hồ sơ sức khỏe" as UC3
+    usecase "Tạo lịch nhắc nhở thuốc" as UC4
+    usecase "Xem lịch nhắc nhở" as UC5
+    usecase "Xóa lịch nhắc nhở" as UC6
+    usecase "Yêu cầu gợi ý tập luyện" as UC7
+    usecase "Xem danh sách người dùng" as UC8
+    usecase "Xem lịch sử chat" as UC9
+    usecase "Quản lý hệ thống" as UC10
+    usecase "Gửi thông báo nhắc nhở" as UC11
+    usecase "Lưu trữ dữ liệu" as UC12
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+User --> UC5
+User --> UC6
+User --> UC7
+
+Admin --> UC8
+Admin --> UC9
+Admin --> UC10
+
+System --> UC11
+System --> UC12
+@enduml
+
+@startuml ComponentDiagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam component {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+skinparam package {
+    BackgroundColor #FFF4E1
+    BorderColor #FF9900
+    FontSize 12
+}
+skinparam cloud {
+    BackgroundColor #F0F0F0
+    BorderColor #666666
+}
+
+title Biểu đồ Component - Kiến trúc hệ thống
+
+package "Frontend Layer (Angular)" {
+    component [Chat UI Component] as UI
+    component [Auth Service] as Auth
+    component [Chat Service] as ChatSvc
+    component [Health Profile Component] as Profile
+    component [Medicine Reminder Component] as Reminder
+}
+
+package "Backend Layer (FastAPI)" {
+    component [FastAPI Server] as API
+    component [Chatbot Pipeline] as ChatBot
+    component [Intent Classifier\nPhoBERT] as Intent
+    component [RAG Retriever\nFAISS] as RAG
+    component [Response Generator\nGemini] as Generator
+}
+
+cloud "External Services" {
+    component [Google Gemini API] as Gemini
+    component [Firebase Services] as Firebase
+    database [Firestore Database] as Firestore
+}
+
+UI --> ChatSvc
+ChatSvc --> API
+Auth --> Firebase
+Profile --> API
+Reminder --> API
+
+API --> ChatBot
+ChatBot --> Intent
+ChatBot --> RAG
+ChatBot --> Generator
+Generator --> Gemini
+ChatBot --> Firestore
+API --> Firestore
+@enduml
+
+@startuml SequenceChat
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+skinparam actor {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+}
+
+title Biểu đồ Sequence - Luồng Chat với AI
+
+actor "Người dùng" as User
+participant "Frontend\n(Angular)" as Frontend
+participant "FastAPI Server" as API
+participant "Intent Classifier" as Intent
+participant "RAG Retriever" as RAG
+participant "Gemini API" as Gemini
+database "Firestore" as Firestore
+
+User -> Frontend: Nhập câu hỏi
+activate Frontend
+Frontend -> API: POST /api/chat
+activate API
+
+API -> Intent: Phân loại intent
+activate Intent
+Intent --> API: Intent + Confidence
+deactivate Intent
+
+alt Intent confidence >= 0.97
+    API -> RAG: Search by intent
+    activate RAG
+    RAG --> API: Relevant documents
+    deactivate RAG
+end
+
+API -> Gemini: Generate response
+activate Gemini
+Gemini --> API: Response text
+deactivate Gemini
+
+API -> Firestore: Lưu conversation
+activate Firestore
+Firestore --> API: Success
+deactivate Firestore
+
+API --> Frontend: JSON response
+deactivate API
+Frontend --> User: Hiển thị câu trả lời
+deactivate Frontend
+@enduml
+
+@startuml SequenceMedicineReminder
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+
+title Biểu đồ Sequence - Nhắc nhở uống thuốc
+
+actor "Người dùng" as User
+participant "Frontend" as Frontend
+participant "FastAPI" as API
+database "Firestore" as Firestore
+participant "Firebase Function" as Function
+participant "Email Service" as Email
+
+== Tạo lịch nhắc nhở ==
+User -> Frontend: Tạo lịch nhắc nhở
+activate Frontend
+Frontend -> API: POST /api/medicine-reminders
+activate API
+API -> API: Parse time & repeat_type
+API -> API: Tính next_reminder_time
+API -> Firestore: Lưu reminder
+activate Firestore
+Firestore --> API: Confirmation
+deactivate Firestore
+API --> Frontend: Reminder created
+deactivate API
+Frontend --> User: Hiển thị thành công
+deactivate Frontend
+
+== Scheduled mỗi phút ==
+loop Mỗi phút
+    Function -> Firestore: Query active reminders
+    activate Firestore
+    Firestore --> Function: List reminders
+    deactivate Firestore
+    Function -> Function: Kiểm tra thời gian
+    
+    alt Đến giờ nhắc nhở
+        Function -> Email: Gửi email notification
+        activate Email
+        Email --> Function: Sent
+        deactivate Email
+        Function -> Firestore: Cập nhật next_reminder_time
+        Function -> Firestore: Cập nhật last_sent
+    end
+end
+@enduml
+
+@startuml SequenceHealthProfile
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+
+title Biểu đồ Sequence - Hồ sơ sức khỏe và gợi ý tập luyện
+
+actor "Người dùng" as User
+participant "Frontend" as Frontend
+participant "FastAPI" as API
+database "Firestore" as Firestore
+participant "Gemini API" as Gemini
+
+== Cập nhật hồ sơ sức khỏe ==
+User -> Frontend: Cập nhật health profile
+activate Frontend
+Frontend -> API: POST health profile data
+activate API
+API -> API: Validate input
+API -> API: Tính toán BMI
+API -> Firestore: Lưu health profile
+activate Firestore
+Firestore --> API: Success
+deactivate Firestore
+API --> Frontend: Profile saved
+deactivate API
+Frontend --> User: Xác nhận
+deactivate Frontend
+
+== Yêu cầu gợi ý tập luyện ==
+User -> Frontend: Yêu cầu gợi ý tập luyện
+activate Frontend
+Frontend -> API: POST /api/health-profile/exercise-suggestion
+activate API
+API -> Firestore: Lấy health profile
+activate Firestore
+Firestore --> API: Profile data
+deactivate Firestore
+API -> API: Tạo prompt với profile
+API -> Gemini: Generate exercise plan
+activate Gemini
+Gemini --> API: JSON response
+deactivate Gemini
+API -> API: Parse JSON
+API --> Frontend: Exercise suggestion
+deactivate API
+Frontend --> User: Hiển thị gợi ý
+deactivate Frontend
+@enduml
+
+@startuml ClassDiagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam class {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+    AttributeFontSize 10
+    MethodFontSize 10
+}
+
+title Biểu đồ Class - Kiến trúc Backend
+
+class FastAPIServer {
+    - _models_ready: bool
+    - _models_loading: bool
+    - _run_chat_pipeline: function
+    + load_models()
+    + chat_endpoint()
+    + health_check()
+    + ready_check()
+}
+
+class ChatbotPipeline {
+    - intent_classifier: IntentClassifier
+    - retriever: RAGRetriever
+    - conversation_states: dict
+    + run_chat_pipeline()
+    + _ensure_models_loaded()
+    + _get_or_create_state()
+    + reset_conversation()
+}
+
+class IntentClassifier {
+    - tokenizer: AutoTokenizer
+    - model: AutoModelForSequenceClassification
+    - id2label: dict
+    + predict_intent(text: str): str
+    + predict_with_conf(text: str): tuple
+}
+
+class RAGRetriever {
+    - embedder: SentenceTransformer
+    - _intent_indexes: dict
+    - _intent_documents: dict
+    + search(query: str, k: int): list
+    + search_by_intent(intent: str, query: str, k: int): list
+}
+
+class GeminiGenerator {
+    - _gemini_model: GenerativeModel
+    - _model_initialized: bool
+    + generate_answer(prompt: str): str
+    + generate_medical_answer(context: str, user_question: str): str
+    - _get_model(): GenerativeModel
+}
+
+class ResponseLayer {
+    + need_more_info(input: str, intent: str): bool
+    + build_clarification_question(intent: str): str
+    + is_follow_up(input: str): bool
+    + is_topic_shift(input: str): bool
+    + parse_switch_confirm(input: str): bool
+}
+
+class SymptomExtractor {
+    + extract_symptoms(input: str): dict
+}
+
+class RiskEstimator {
+    + estimate_risk(symptoms: dict): str
+}
+
+FastAPIServer --> ChatbotPipeline : uses
+ChatbotPipeline --> IntentClassifier : uses
+ChatbotPipeline --> RAGRetriever : uses
+ChatbotPipeline --> GeminiGenerator : uses
+ChatbotPipeline --> ResponseLayer : uses
+ChatbotPipeline --> SymptomExtractor : uses
+ChatbotPipeline --> RiskEstimator : uses
+@enduml
+
+@startuml DeploymentDiagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam node {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 12
+}
+skinparam component {
+    BackgroundColor #FFF4E1
+    BorderColor #FF9900
+    FontSize 10
+}
+skinparam cloud {
+    BackgroundColor #F0F0F0
+    BorderColor #666666
+}
+skinparam database {
+    BackgroundColor #D4EDDA
+    BorderColor #28A745
+}
+
+title Biểu đồ Deployment - Kiến trúc triển khai
+
+node "Client Layer" {
+    component [Web Browser] as Browser
+    component [Mobile App\nFuture] as Mobile
+}
+
+node "CDN & Hosting" {
+    component [Firebase Hosting\nAngular App] as Hosting
+}
+
+node "Backend Services" {
+    component [FastAPI Server\nGunicorn + Uvicorn] as APIServer
+    component [ML Models\nPhoBERT, FAISS] as Models
+}
+
+cloud "Cloud Services" {
+    component [Firebase Services] as Firebase
+    database [Firestore Database] as Firestore
+    component [Cloud Functions\nMedicine Reminder] as Functions
+    component [Firebase Auth] as Auth
+}
+
+cloud "External APIs" {
+    component [Google Gemini API] as Gemini
+    component [Email Service] as Email
+}
+
+Browser --> Hosting
+Mobile -.-> Hosting
+Hosting --> APIServer
+APIServer --> Models
+APIServer --> Firestore
+APIServer --> Gemini
+APIServer --> Auth
+Functions --> Firestore
+Functions --> Email
+@enduml
+
+@startuml ActivityChat
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+skinparam arrow {
+    Color #0066CC
+}
+
+title Biểu đồ Activity - Luồng xử lý Chat
+
+start
+:Người dùng nhập câu hỏi;
+if (Input hợp lệ?) then (Không)
+    :Trả về lỗi;
+    stop
+else (Có)
+endif
+
+:Intent Classification\nPhoBERT;
+:Context Detection;
+
+if (Loại context?) then (Follow-up)
+    :Giữ intent cũ;
+elseif (Topic shift) then
+    :Đổi intent mới;
+else (Normal)
+    :Dùng intent mới;
+endif
+
+if (Intent Lock?) then (Có)
+    :Dùng locked intent;
+else (Không)
+endif
+
+if (Pending Intent?) then (Có)
+    :Hỏi xác nhận;
+    stop
+else (Không)
+endif
+
+:Symptom Extraction;
+
+if (Risk Level?) then (High)
+    :Cảnh báo nguy hiểm;
+    stop
+elseif (Low/Medium) then
+endif
+
+if (Cần clarification?) then (Có)
+    :Hỏi thêm thông tin;
+    stop
+else (Không)
+endif
+
+:RAG Guard;
+:RAG Retrieval;
+
+if (RAG Confidence?) then (High >= 0.7)
+    :STRONG RAG\n3-5 documents;
+elseif (Medium >= 0.5) then
+    :SOFT RAG\n1-2 documents;
+else (Low < 0.5)
+    :NO RAG\nFallback Gemini;
+endif
+
+:Load Health Profile\n(nếu có user_id);
+:Build Conversation History;
+:Generate Response\nvới Gemini API;
+:Lưu vào Firestore;
+:Return Response;
+stop
+@enduml
+
+@startuml StateMachineChat
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam state {
+    BackgroundColor #E1F5FF
+    BorderColor #0066CC
+    FontSize 11
+}
+
+title Biểu đồ State Machine - Trạng thái hội thoại
+
+[*] --> Idle : Khởi tạo
+
+Idle --> Processing : User nhập câu hỏi
+Processing --> IntentClassifying : Validate input
+IntentClassifying --> ContextDetecting : Phân loại intent
+ContextDetecting --> RiskChecking : Xác định context
+RiskChecking --> Clarifying : Kiểm tra risk
+Clarifying --> RAGRetrieving : Kiểm tra clarification
+RAGRetrieving --> Generating : Truy xuất RAG
+Generating --> Responding : Generate response
+Responding --> Idle : Trả về response
+
+RiskChecking --> SafetyWarning : Risk = High
+SafetyWarning --> Idle : Cảnh báo nguy hiểm
+
+Clarifying --> AskingMore : Cần clarification
+AskingMore --> Idle : Hỏi thêm thông tin
+
+ContextDetecting --> PendingConfirm : Intent mơ hồ
+PendingConfirm --> Idle : Hỏi xác nhận
+@enduml
