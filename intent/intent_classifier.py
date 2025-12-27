@@ -15,18 +15,9 @@ class IntentClassifier:
         )
         self.model.eval()
 
-        # Map ID → label (theo model mới)
-        self.id2label = {
-            0: "bao_dau_bung",
-            1: "bao_dau_dau",
-            2: "bao_ho",
-            3: "bao_met_moi",
-            4: "bao_sot",
-            5: "lo_lang_stress",
-            6: "other",
-            7: "tu_van_dinh_duong",
-            8: "tu_van_tap_luyen"
-        }
+        # Lấy id2label từ model config (đồng bộ với model training)
+        self.id2label = self.model.config.id2label
+        print(f"📋 Intent classes từ model config: {self.id2label}")
 
     # ------------------------
     # Chỉ trả về nhãn intent
@@ -37,7 +28,9 @@ class IntentClassifier:
             logits = self.model(**inputs).logits
             pred_id = torch.argmax(logits, dim=1).item()
 
-        return self.id2label.get(pred_id, "unknown")
+        # Đọc từ model.config.id2label
+        label = self.model.config.id2label.get(pred_id, "unknown")
+        return label
 
     # ------------------------
     # Trả về nhãn + độ tin cậy
@@ -53,11 +46,34 @@ class IntentClassifier:
         pred_id = pred_id.item()
         conf = conf.item()
 
-        # Xử lý an toàn — hỗ trợ key là số hoặc chuỗi
-        label = (
-            self.id2label.get(pred_id) or
-            self.id2label.get(str(pred_id)) or
-            "unknown"
-        )
-
+        # Đọc từ model.config.id2label
+        label = self.model.config.id2label.get(pred_id, "unknown")
         return label, conf
+
+    # ========================
+    # Trả về TOP-K intent (0-1 scale)
+    # ========================
+    def predict_topk(self, text, k=2):
+        """Trả về top-k intent với confidence (0-1).
+        
+        Returns:
+            [(intent1, conf1), (intent2, conf2), ...]
+        """
+        inputs = self.tokenizer(text, return_tensors="pt", truncation=True).to(self.model.device)
+
+        with torch.no_grad():
+            logits = self.model(**inputs).logits
+            probs = F.softmax(logits, dim=1)
+
+        # Lấy top-k
+        top_confs, top_ids = torch.topk(probs, k=min(k, len(self.model.config.id2label)), dim=1)
+        
+        result = []
+        for i in range(top_confs.shape[1]):
+            pred_id = top_ids[0, i].item()
+            conf = top_confs[0, i].item()  # 0-1 scale
+            
+            label = self.model.config.id2label.get(pred_id, "unknown")
+            result.append((label, conf))
+        
+        return result

@@ -9,7 +9,7 @@ from typing import Optional
 
 # API Key - có thể set qua biến môi trường GEMINI_API_KEY
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_API_key")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "your_api_key_here")
 
 
 # Khởi tạo Gemini client

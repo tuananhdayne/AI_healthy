@@ -259,36 +259,50 @@ if not cleaned_input:
 
 ---
 
-#### **BƯỚC 2: INTENT CLASSIFICATION**
+#### **BƯỚC 2: INTENT CLASSIFICATION (TOP-2)**
 
 ```python
-intent, intent_conf = intent_classifier.predict_with_conf(cleaned_input)
-print(f"🧠 Intent: {intent} | conf={intent_conf:.2f}")
+# Lấy TOP-2 intent với confidence
+top2 = intent_classifier.predict_topk(cleaned_input, k=2)
+intent1, conf1 = top2[0]  # Highest confidence
+intent2, conf2 = top2[1]  # Second highest
+gap = conf1 - conf2
+
+# Set lại để tương thích với code cũ
+intent_new = intent1
+intent_conf = conf1
+
+print(f"🧠 TOP-2 Classification:")
+print(f"   intent1={intent1}, conf1={conf1:.4f}")
+print(f"   intent2={intent2}, conf2={conf2:.4f}")
+print(f"   gap={gap:.4f}")
 ```
 
 **Các intent được hỗ trợ:**
 - `bao_dau_bung`: Báo đau bụng
 - `bao_dau_dau`: Báo đau đầu
 - `bao_ho`: Báo ho
-- `bao_met`: Báo mệt mỏi
+- `bao_met_moi`: Báo mệt mỏi
 - `bao_sot`: Báo sốt
-- `chao_hoi`: Chào hỏi
 - `lo_lang_stress`: Lo lắng, stress
-- `nhac_nho_uong_thuoc`: Nhắc nhở uống thuốc
 - `tu_van_dinh_duong`: Tư vấn dinh dưỡng
 - `tu_van_tap_luyen`: Tư vấn tập luyện
 - `other`: Khác
 - `unknown`: Không xác định được
 
 **Công nghệ:**
-- Model: PhoBERT (Vietnamese BERT)
+- Model: PhoBERT (Vietnamese BERT) + `predict_topk(k=2)`
 - Input: Câu hỏi của người dùng
-- Output: Intent label + confidence score (0.0 - 1.0)
+- Output: 
+  - `intent1, conf1`: Highest probability intent (0.0 - 1.0)
+  - `intent2, conf2`: Second highest probability intent
+  - `gap = conf1 - conf2`: Khoảng cách giữa TOP-1 và TOP-2
 
 **Vai trò:**
+- Xác định intent chính + intent thứ hai (để phát hiện mơ hồ)
+- Gap nhỏ (< 0.05) → có thể mơ hồ, cân nhắc pending
+- Gap lớn (> 0.93) → rất chắc, có thể đổi ngay
 - Quyết định **chiến lược trả lời** (RAG hay Gemini tự do)
-- Confidence >= 0.998 → search RAG theo intent
-- Confidence < 0.98 hoặc intent = "other"/"unknown" → dùng Gemini tự do
 
 ---
 
@@ -365,31 +379,73 @@ state = _get_or_create_state(session_id)
 
 ---
 
-#### **BƯỚC 5: PENDING FLOW (Xử lý xác nhận đổi chủ đề)**
+#### **BƯỚC 5: PENDING FLOW (Xử lý xác nhận đổi chủ đề) & TOP-2 SWITCH OVERRIDE**
 
 ```python
+# BƯỚC 5A: PENDING FLOW (nếu đang chờ xác nhận)
 if pending_type == "intent_switch_confirm":
     confirm_result = parse_switch_confirm(cleaned_input)
     if confirm_result is True:
         intent = pending_intent  # Xác nhận chuyển
+        conf1 = 1.0  # 🔧 Reset conf1 vì user xác nhận rõ
     elif confirm_result is False:
         intent = pending_from_intent  # Giữ chủ đề cũ
+        conf1 = 1.0  # 🔧 Reset conf1 vì user xác nhận rõ
     else:
         # Không rõ → hỏi lại, không đổi intent, không RAG
         return response_with_confirmation_question
+
+# BƯỚC 5B: TOP-2 SWITCH OVERRIDE (quyết định đổi chủ đề dựa TOP-2)
+elif last_intent and intent1 != last_intent and not is_follow_up_flag and not is_topic_shift_flag:
+    
+    # Sub-case 1: Đổi ngay khi RẤT CHẮC
+    if conf1 >= 0.98 and conf2 <= 0.02:
+        final_intent = intent1
+        state.pop("intent_lock", None)  # Xóa lock
+        print(f"✅ TOP-2 SWITCH (rất chắc): conf1={conf1:.4f}>=0.98 & conf2={conf2:.4f}<=0.02")
+    
+    # Sub-case 2: Mơ hồ → TẠO PENDING HỎI XÁC NHẬN
+    elif 0.85 <= conf1 < 0.98:
+        state["pending_intent"] = intent1
+        state["pending_from_intent"] = last_intent
+        state["pending_type"] = "intent_switch_confirm"
+        response["reply"] = (
+            f"💬 Bạn đang muốn hỏi tiếp về {get_intent_label(last_intent)} "
+            f"hay chuyển sang {get_intent_label(intent1)}? "
+            "Vui lòng trả lời rõ ràng."
+        )
+        print(f"❓ TOP-2 SWITCH (mơ hồ): 0.85<=conf1={conf1:.4f}<0.98 → Tạo pending")
+        return response  # Return luôn, không RAG
+    
+    # Sub-case 3: Quá mơ hồ → GIỮ LAST_INTENT
+    else:  # conf1 < 0.85
+        final_intent = last_intent
+        print(f"⚠️ TOP-2 SWITCH (quá mơ hồ): conf1={conf1:.4f}<0.85 → Giữ last_intent")
+
+# BƯỚC 5C: Intent1 == last_intent → nói tiếp
+else:
+    # ... tiếp tục xử lý
 ```
 
 **Khi nào tạo pending:**
 - Có `last_intent`
-- `intent_new != last_intent`
+- `intent1 != last_intent` (muốn đổi chủ đề)
 - `is_follow_up == False`
 - `is_topic_shift == False`
-- `intent_conf` trong vùng xám: [0.85, 0.97)
+- `0.85 <= conf1 < 0.98` (vùng xám - mơ hồ)
 
-**Hành vi:**
-- Không RAG, không generate câu trả lời chuyên môn
-- Hỏi xác nhận: "Bạn đang muốn hỏi tiếp về {intent_cũ} hay chuyển sang {intent_mới}?"
-- Parse câu trả lời: True (chuyển), False (giữ), None (hỏi lại)
+**Khi nào đổi ngay:**
+- `conf1 >= 0.98` (rất chắc TOP-1)
+- `conf2 <= 0.02` (TOP-2 gần như bỏ)
+- → Đổi luôn, xóa intent_lock
+
+**Khi nào giữ intent cũ (vì quá mơ hồ):**
+- `conf1 < 0.85` (confidence quá thấp)
+- → Không đủ chắc để đổi, giữ last_intent
+
+**Khi nào reset conf1:**
+- Sau pending confirm (user xác nhận hoặc giữ) → `conf1 = 1.0`
+- Lý do: Câu trả lời của user đã rõ ràng, không cần dự đoán nữa
 
 ---
 
@@ -420,32 +476,50 @@ is_topic_shift_flag = is_topic_shift(cleaned_input)
 
 ---
 
-#### **BƯỚC 7: INTENT CONTINUITY GUARD (Giữ intent khi follow-up)**
+#### **BƯỚC 7: INTENT LOCK (Stabilization - không chặn TOP-2 override)**
 
 ```python
-if is_follow_up_flag and last_intent and not is_topic_shift_flag:
-    intent = last_intent  # Ưu tiên tuyệt đối giữ intent cũ
-    print("✅ Follow-up detected → giữ intent cũ")
-elif is_topic_shift_flag and not is_follow_up_flag:
-    intent = intent_new  # Cho phép đổi chủ đề
-    print("✅ Topic shift rõ → đổi intent")
-elif state.get("intent_lock"):
-    # Intent lock active → dùng locked intent
-    intent = intent_lock["intent"]
-    intent_lock["turns"] -= 1
+# Chỉ set lock khi:
+# - final_intent == last_intent (nói tiếp cùng chủ đề)
+# - conf1 >= 0.98 (rất chắc)
+# - intent_category == "symptom" (tránh lock non-symptom intents)
+# - final_intent not in ["other", "unknown"]
+
+intent_category = get_intent_category(final_intent)
+if (final_intent == last_intent and conf1 >= 0.98 and 
+    final_intent not in ["other", "unknown"] and 
+    intent_category == "symptom"):
+    state["intent_lock"] = {"intent": final_intent, "turns": 2}
+    print(f"🔒 Set intent lock: {final_intent} (symptom), conf1={conf1:.4f} >= 0.98")
+else:
+    state.pop("intent_lock", None)
 ```
 
-**Logic ưu tiên:**
-1. **Follow-up** → Giữ intent cũ (ưu tiên tuyệt đối)
-2. **Topic shift rõ** → Cho phép đổi intent
-3. **Intent lock** → Dùng locked intent (1-2 lượt)
-4. **Pending intent** → Tạo pending nếu intent đổi nhưng mơ hồ
-5. **Bình thường** → Dùng intent classifier
+**Logic ưu tiên (từ cao đến thấp):**
+
+1. **Pending confirm** → User xác nhận → Đổi/giữ theo ý, reset `conf1 = 1.0`
+2. **Follow-up** → Giữ intent cũ (ưu tiên tuyệt đối)
+3. **Topic shift rõ** → Cho phép đổi intent, xóa lock
+4. **TOP-2 SWITCH OVERRIDE** (TRƯỚC intent_lock):
+   - Đổi ngay nếu `conf1 >= 0.98 & conf2 <= 0.02`
+   - Tạo pending nếu `0.85 <= conf1 < 0.98`
+   - Giữ last_intent nếu `conf1 < 0.85`
+5. **Intent lock** (chỉ nếu không bị TOP-2 override):
+   - Giữ intent ổn định 1-2 lượt
+   - Chỉ set cho symptom intents
+6. **Default** → Dùng intent1 classifier
 
 **Intent lock:**
-- Khi `intent_conf >= 0.97` → Set lock với `turns = 2`
-- Giữ intent ổn định 1-2 lượt để tránh dao động
-- Tự động xóa khi hết lượt hoặc topic shift
+- **Khi set:**
+  - `final_intent == last_intent` (nói tiếp)
+  - `conf1 >= 0.98` (rất chắc)
+  - `intent_category == "symptom"` (chỉ symptom)
+- **Vai trò:** Giữ intent ổn định 1-2 lượt khi follow-up, tránh dao động
+- **Không chặn TOP-2:** Nếu `conf1 >= 0.98 & conf2 <= 0.02` → đổi ngay, xóa lock
+- **Tự động xóa:**
+  - Hết lượt (turns == 0)
+  - Topic shift
+  - Không thỏa điều kiện set lock
 
 ---
 

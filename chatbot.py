@@ -157,6 +157,8 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
     # ============================
     pending_intent_before = state.get("pending_intent")
     rag_mode = None  # Khởi tạo để dùng trong log (sẽ được set sau)
+    intent_decision_reason = "unknown"  # Khởi tạo (sẽ được set ở các BƯỚC)
+    
     
     if pending_type == "intent_switch_confirm":
         pending_intent = state.get("pending_intent")
@@ -174,6 +176,7 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         if confirm_result is True:
             # Xác nhận chuyển sang chủ đề mới
             intent = pending_intent
+            conf1 = 1.0  # 🔧 Reset conf1 vì user xác nhận rõ
             # Xóa pending fields
             state.pop("pending_intent", None)
             state.pop("pending_from_intent", None)
@@ -184,6 +187,7 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
         elif confirm_result is False:
             # Giữ chủ đề cũ
             intent = pending_from_intent
+            conf1 = 1.0  # 🔧 Reset conf1 vì user xác nhận rõ
             # Xóa pending fields
             state.pop("pending_intent", None)
             state.pop("pending_from_intent", None)
@@ -224,13 +228,19 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
             return response
     
     # ============================
-    # BƯỚC 2: INTENT CLASSIFICATION
+    # BƯỚC 2: INTENT CLASSIFICATION - TOP-2
     # ============================
-    intent_new, intent_conf = intent_classifier.predict_with_conf(cleaned_input)
+    top2 = intent_classifier.predict_topk(cleaned_input, k=2)
+    intent1, conf1 = top2[0]
+    intent2, conf2 = top2[1] if len(top2) > 1 else ("other", 0.0)
+    
+    # Giữ tương thích với code còn lại
+    intent_new, intent_conf = intent1, conf1
+    
     print(f"\n{'='*60}")
-    print(f"🧠 INTENT CLASSIFICATION")
-    print(f"   intent_new: {intent_new}")
-    print(f"   conf_new: {intent_conf:.3f}")
+    print(f"🧠 INTENT CLASSIFICATION (TOP-2)")
+    print(f"   intent1: {intent1} (conf1: {conf1:.4f})")
+    print(f"   intent2: {intent2} (conf2: {conf2:.4f})")
     print(f"   last_intent: {last_intent}")
     print(f"{'='*60}\n")
     
@@ -250,9 +260,11 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
     if is_topic_shift_flag and not is_follow_up_flag:
         # Đổi chủ đề rõ → cho phép đổi
         intent = intent_new
-        print(f"✅ Topic shift rõ → đổi intent sang: {intent}")
+        print(f"✅ TOPIC SHIFT: Đổi sang {intent}")
         # Xóa intent lock nếu có (vì đổi chủ đề rõ)
         state.pop("intent_lock", None)
+        final_intent = intent
+        intent_decision_reason = "topic_shift"
         
     # ============================
     # BƯỚC 5: FOLLOW-UP (Giữ chủ đề cũ)
@@ -260,45 +272,30 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
     elif is_follow_up_flag and last_intent and not is_topic_shift_flag:
         # Follow-up → ưu tiên tuyệt đối giữ intent cũ
         intent = last_intent
-        print(f"✅ Follow-up detected → giữ intent cũ: {intent} (không dùng intent mới: {intent_new})")
+        print(f"✅ FOLLOW-UP: Giữ intent cũ {intent}")
+        final_intent = intent
+        intent_decision_reason = "follow_up"
         
     # ============================
-    # BƯỚC 6: INTENT LOCK (GPT-like stabilization)
+    # BƯỚC 6: TOP-2 SWITCH OVERRIDE (Đổi chủ đề CHẮC hoặc PENDING)
     # ============================
-    elif state.get("intent_lock"):
-        intent_lock = state["intent_lock"]
-        locked_intent = intent_lock.get("intent")
-        turns_left = intent_lock.get("turns", 0)
+    elif last_intent and intent1 != last_intent and not is_follow_up_flag and not is_topic_shift_flag:
+        # 6.1) Đổi NGAY khi rất chắc
+        if conf1 >= 0.98 and conf2 <= 0.02:
+            intent = intent1
+            state.pop("intent_lock", None)  # Xóa lock vì TOP-2 override
+            print(f"✅ TOP-2 OVERRIDE (NGAY): conf1={conf1:.4f} >= 0.98, conf2={conf2:.4f} <= 0.02 → Đổi sang {intent1}")
+            final_intent = intent
+            intent_decision_reason = "top2_override_sure"
         
-        if turns_left > 0 and not is_topic_shift_flag:
-            # Dùng intent lock
-            intent = locked_intent
-            intent_lock["turns"] = turns_left - 1
-            print(f"🔒 Intent lock active → dùng: {intent} (còn {turns_left - 1} lượt)")
-            if turns_left - 1 <= 0:
-                # Hết lượt lock → xóa
-                state.pop("intent_lock", None)
-        else:
-            # Hết lượt hoặc topic shift → dùng intent mới
-            intent = intent_new
-            state.pop("intent_lock", None)
-            
-    # ============================
-    # BƯỚC 7: PENDING INTENT (Tạo pending khi intent đổi nhưng mơ hồ)
-    # ============================
-    elif last_intent and intent_new != last_intent and not is_follow_up_flag and not is_topic_shift_flag:
-        # Intent đổi nhưng không rõ ràng → kiểm tra confidence
-        intent_conf_low = 0.85
-        intent_conf_high = 0.97
-        
-        if intent_conf_low <= intent_conf < intent_conf_high:
-            # Vùng xám → tạo pending
-            state["pending_intent"] = intent_new
+        # 6.2) Mơ hồ → TẠO PENDING hỏi xác nhận
+        elif 0.85 <= conf1 < 0.98:
+            state["pending_intent"] = intent1
             state["pending_from_intent"] = last_intent
             state["pending_type"] = "intent_switch_confirm"
             
             from_label = get_intent_label(last_intent)
-            to_label = get_intent_label(intent_new)
+            to_label = get_intent_label(intent1)
             
             response["reply"] = (
                 f"💬 Bạn đang muốn hỏi tiếp về {from_label} hay chuyển sang {to_label}? "
@@ -306,53 +303,96 @@ def run_chat_pipeline(user_input: str, session_id: str = "default", user_id: Opt
             )
             response["stage"] = "intent_switch_confirm"
             response["intent"] = last_intent  # Giữ intent cũ trong response
-            response["intent_confidence"] = float(intent_conf)
+            response["intent_confidence"] = float(conf1)
+            
+            print(f"❓ TOP-2 OVERRIDE (PENDING): 0.85 <= conf1={conf1:.4f} < 0.98 → Hỏi xác nhận")
             
             # Log trước khi return
             pending_intent_after = state.get("pending_intent")
             print(f"\n{'='*60}")
             print(f"📊 LOG SUMMARY - PENDING CREATED")
-            print(f"   intent_new: {intent_new}")
-            print(f"   conf_new: {intent_conf:.3f}")
+            print(f"   intent1: {intent1} (conf1: {conf1:.4f})")
+            print(f"   intent2: {intent2} (conf2: {conf2:.4f})")
             print(f"   last_intent: {last_intent}")
             print(f"   final_intent: {last_intent} (giữ cũ, chờ xác nhận)")
+            print(f"   decision: top2_override_pending")
             print(f"   is_follow_up: {is_follow_up_flag}")
             print(f"   is_topic_shift: {is_topic_shift_flag}")
             print(f"   pending_intent (trước): {pending_intent_before}")
             print(f"   pending_intent (sau): {pending_intent_after}")
-            print(f"   rag_intent: N/A (không RAG khi pending)")
-            print(f"   rag_mode: None (không RAG khi pending)")
+            print(f"   rag_intent: N/A")
+            print(f"   rag_mode: None")
             print(f"   use_rag: False")
             print(f"   stage: {response['stage']}")
             print(f"{'='*60}\n")
             
-            # Không RAG, không generate câu trả lời chuyên môn
             # Cập nhật conversation history với reply
             if history_list and history_list[-1][1] is None:
                 history_list[-1] = (history_list[-1][0], response["reply"])
             return response
+        
+        # 6.3) Khác → kiểm tra conf1 để giữ hay đổi
         else:
-            # Confidence quá thấp hoặc quá cao → dùng intent mới
+            # Nếu conf1 quá thấp (<0.85) → không rủi ro đổi, giữ last_intent hoặc other
+            if conf1 < 0.85:
+                intent = last_intent if last_intent else "other"
+                print(f"⚠️ TOP-2 DEFAULT (conf1<0.85): conf1={conf1:.4f} quá thấp → Giữ {intent}")
+                intent_decision_reason = "top2_low_conf"
+            else:
+                # conf1 >= 0.85 → dùng intent1
+                intent = intent_new
+                print(f"ℹ️ TOP-2 DEFAULT: conf1={conf1:.4f} ∈ [0.85, 0.98) → Dùng intent1 {intent1}")
+                intent_decision_reason = "top2_default"
+            final_intent = intent
+    
+    # ============================
+    # BƯỚC 7: INTENT LOCK (Stabilization - không chặn TOP-2 override)
+    # ============================
+    elif state.get("intent_lock") and not is_follow_up_flag and not is_topic_shift_flag:
+        intent_lock = state["intent_lock"]
+        locked_intent = intent_lock.get("intent")
+        turns_left = intent_lock.get("turns", 0)
+        
+        if turns_left > 0:
+            # Dùng intent lock
+            intent = locked_intent
+            intent_lock["turns"] = turns_left - 1
+            print(f"🔒 INTENT LOCK: Dùng {intent} (còn {turns_left - 1} lượt)")
+            final_intent = intent
+            intent_decision_reason = "intent_lock"
+            if turns_left - 1 <= 0:
+                state.pop("intent_lock", None)
+        else:
+            # Hết lượt → dùng default
             intent = intent_new
+            state.pop("intent_lock", None)
+            final_intent = intent
+            intent_decision_reason = "default_after_lock"
             
     # ============================
-    # BƯỚC 8: BÌNH THƯỜNG (Dùng intent classifier)
+    # BƯỚC 8: DEFAULT
     # ============================
     else:
         intent = intent_new
-    
-    # Final intent decision
-    final_intent = intent
-    print(f"🎯 FINAL INTENT DECISION")
-    print(f"   final_intent: {final_intent}")
-    print(f"   (so với intent_new: {intent_new}, last_intent: {last_intent})\n")
+        final_intent = intent
+        intent_decision_reason = "default"
+        print(f"ℹ️ DEFAULT: Dùng intent1 {intent1}")
     
     # ============================
-    # BƯỚC 9: INTENT LOCK (Set lock nếu confidence cao)
+    # BƯỚC 9: SET INTENT LOCK (Chỉ nếu intent ổn định & conf cao & symptom category)
     # ============================
-    if intent_conf >= 0.97 and intent not in ["other", "unknown"]:
-        state["intent_lock"] = {"intent": intent, "turns": 2}
-        print(f"🔒 Set intent lock: {intent} (2 lượt)\n")
+    # Chỉ set lock khi:
+    # - final_intent == last_intent (nói tiếp cùng chủ đề)
+    # - conf1 >= 0.98 (rất chắc)
+    # - intent là symptom category (tránh lock cho other, tư vấn)
+    intent_category = get_intent_category(final_intent)
+    if (final_intent == last_intent and conf1 >= 0.98 and 
+        final_intent not in ["other", "unknown"] and 
+        intent_category == "symptom"):
+        state["intent_lock"] = {"intent": final_intent, "turns": 2}
+        print(f"🔒 SET LOCK: final_intent={final_intent} (symptom), conf1={conf1:.4f} >= 0.98\n")
+    else:
+        state.pop("intent_lock", None)
     
     # ============================
     # BƯỚC 10: SYMPTOM EXTRACTION & RISK
@@ -776,14 +816,16 @@ QUAN TRỌNG: Không được chẩn đoán bệnh, không được gợi ý thu
     # ============================
     print(f"\n{'='*60}")
     print(f"📊 LOG SUMMARY - MỖI LƯỢT")
+    print(f"   TOP-2: intent1={intent1} (conf1={conf1:.4f}), intent2={intent2} (conf2={conf2:.4f})")
     print(f"   intent_new: {intent_new}")
-    print(f"   conf_new: {intent_conf:.3f}")
+    print(f"   conf_new: {intent_conf:.4f}")
     print(f"   last_intent: {last_intent}")
     print(f"   final_intent: {final_intent}")
+    print(f"   decision: {intent_decision_reason}")
     print(f"   is_follow_up: {is_follow_up_flag}")
     print(f"   is_topic_shift: {is_topic_shift_flag}")
     print(f"   pending_intent (trước): {pending_intent_before}")
-    print(f"   pending_intent (sau): {pending_intent_after}")
+    print(f"   pending_intent (sau): {state.get('pending_intent', 'None')}")
     print(f"   rag_intent: {rag_intent}")
     print(f"   rag_mode: {rag_mode} (strong/soft/None)")
     print(f"   use_rag: {use_rag}")
