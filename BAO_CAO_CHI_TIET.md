@@ -364,92 +364,117 @@ User Input
     ↓
 [1] Input Validation
     ↓
-[2] Intent Classification (PhoBERT)
-    ├─→ Intent + Confidence
+[2] Pending Flow (nếu đang chờ xác nhận đổi chủ đề)
+    ├─→ User xác nhận? → Đổi intent, reset conf1 = 1.0
+    ├─→ User giữ? → Giữ intent cũ, reset conf1 = 1.0
+    └─→ Không rõ? → Hỏi lại
     ↓
-[3] Context Detection
+[3] Intent Classification (TOP-2 PhoBERT)
+    ├─→ intent1, conf1 (highest)
+    └─→ intent2, conf2 (second highest)
+    ↓
+[4] Context Detection
     ├─→ Follow-up? → Giữ intent cũ
-    ├─→ Topic shift? → Đổi intent mới
-    └─→ Normal → Dùng intent mới
+    ├─→ Topic shift? → Đổi intent mới, xóa lock
+    └─→ Normal → Tiếp tục đến TOP-2 Switch
     ↓
-[4] Intent Lock Check
-    ├─→ Lock active? → Dùng locked intent
-    └─→ No lock → Tiếp tục
+[5] TOP-2 Switch Override (TRƯỚC intent_lock)
+    ├─→ intent1 != last_intent?
+    │   ├─→ conf1 >= 0.98 & conf2 <= 0.02 → Đổi ngay, xóa lock
+    │   ├─→ 0.85 <= conf1 < 0.98 → Tạo pending hỏi xác nhận
+    │   └─→ conf1 < 0.85 → Giữ last_intent (quá mơ hồ)
+    └─→ intent1 == last_intent → Tiếp tục
     ↓
-[5] Pending Intent Check
-    ├─→ Có pending? → Hỏi xác nhận
-    └─→ No pending → Tiếp tục
+[6] Intent Lock Check (chỉ nếu không bị TOP-2 override)
+    ├─→ Lock active & final_intent == last_intent?
+    ├─→ intent_category == "symptom"?
+    └─→ Dùng locked intent
     ↓
-[6] Symptom Extraction
+[7] Symptom Extraction
     ↓
-[7] Risk Estimation
+[8] Risk Estimation
     ├─→ High risk? → Cảnh báo + Return
     └─→ Low/Medium → Tiếp tục
     ↓
-[8] Clarification Check
+[9] Clarification Check
     ├─→ Cần clarification? → Hỏi thêm + Return
     └─→ No need → Tiếp tục
     ↓
-[9] RAG Guard
+[10] RAG Guard
     ├─→ Follow-up? → Dùng intent cũ cho RAG
     └─→ Normal → Dùng intent hiện tại
     ↓
-[10] RAG Retrieval
-    ├─→ Intent confidence >= 0.97? → Search by intent
-    ├─→ Intent confidence [0.85, 0.97)? → Global search (nếu intent không đổi)
+[11] RAG Retrieval
+    ├─→ intent_category == "no_rag"? → Skip RAG
+    ├─→ conf1 >= 0.98? → Search by intent (STRONG)
+    ├─→ conf1 >= 0.85? → Global search (nếu intent không đổi)
     └─→ Otherwise → No RAG
     ↓
-[11] RAG Gate Logic
+[12] RAG Gate Logic
     ├─→ RAG confidence >= strong_threshold? → STRONG RAG (3-5 docs)
     ├─→ RAG confidence >= soft_threshold? → SOFT RAG (1-2 docs)
     └─→ Otherwise → NO RAG
     ↓
-[12] Load Health Profile (nếu có user_id)
+[13] Load Health Profile (nếu có user_id)
     ↓
-[13] Build Conversation History
+[14] Build Conversation History
     ↓
-[14] Generate Response
+[15] Generate Response
     ├─→ Use RAG? → Generate với RAG context
     └─→ No RAG? → Generate với Gemini tự do
     ↓
-[15] Return Response
+[16] Return Response
 ```
 
 #### 5.1.1. Biểu đồ Activity - Luồng xử lý Chat
 
-Biểu đồ Activity mô tả chi tiết luồng xử lý chat:
+Biểu đồ Activity mô tả chi tiết luồng xử lý chat với TOP-2 decision:
 
 ```mermaid
 flowchart TD
     Start([Người dùng nhập câu hỏi]) --> Validate{Input hợp lệ?}
     Validate -->|Không| Error[Trả về lỗi]
-    Validate -->|Có| Intent[Intent Classification]
+    Validate -->|Có| Pending{Đang chờ xác nhận?}
     
-    Intent --> Context{Context Detection}
+    Pending -->|Xác nhận| ConfirmYes[Đổi intent, conf1=1.0]
+    Pending -->|Giữ| ConfirmNo[Giữ intent cũ, conf1=1.0]
+    Pending -->|Không rõ| AskAgain[Hỏi lại]
+    Pending -->|Không| Intent[Intent Classification TOP-2]
+    ConfirmYes --> Extract
+    ConfirmNo --> Extract
+    AskAgain --> End1([Return])
+    
+    Intent --> GetTop2[Lấy intent1, conf1, intent2, conf2]
+    GetTop2 --> Context{Context Detection}
+    
     Context -->|Follow-up| KeepIntent[Giữ intent cũ]
-    Context -->|Topic shift| NewIntent[Đổi intent mới]
-    Context -->|Normal| UseNew[Dùng intent mới]
+    Context -->|Topic shift| NewIntent[Đổi intent mới, xóa lock]
+    Context -->|Normal| Top2Switch{TOP-2 Switch Override}
     
-    KeepIntent --> LockCheck{Intent Lock?}
-    NewIntent --> LockCheck
-    UseNew --> LockCheck
+    Top2Switch -->|intent1 != last_intent & conf1≥0.98 & conf2≤0.02| ImmediateSwitch[Đổi ngay, xóa lock]
+    Top2Switch -->|intent1 != last_intent & 0.85≤conf1<0.98| CreatePending[Tạo pending, hỏi user]
+    Top2Switch -->|intent1 != last_intent & conf1<0.85| KeepLast[Giữ last_intent - quá mơ hồ]
+    Top2Switch -->|intent1 == last_intent| CheckLock[Tiếp tục]
     
-    LockCheck -->|Có lock| UseLock[Dùng locked intent]
-    LockCheck -->|Không| PendingCheck{Pending Intent?}
-    UseLock --> PendingCheck
+    KeepIntent --> Extract
+    NewIntent --> Extract
+    ImmediateSwitch --> Extract
+    CreatePending --> End2([Return pending])
+    KeepLast --> Extract
+    CheckLock --> LockCheck{Intent Lock?}
     
-    PendingCheck -->|Có| AskConfirm[Hỏi xác nhận]
-    PendingCheck -->|Không| Extract[Symptom Extraction]
-    AskConfirm --> End1([Return])
+    LockCheck -->|Lock active & category=symptom| UseLock[Dùng locked intent]
+    LockCheck -->|Không| Extract[Symptom Extraction]
+    UseLock --> Extract
     
     Extract --> Risk{Risk Level?}
     Risk -->|High| Safety[Cảnh báo nguy hiểm]
     Risk -->|Low/Medium| Clarify{Cần clarification?}
-    Safety --> End2([Return])
+    Safety --> End3([Return])
     
     Clarify -->|Có| AskMore[Hỏi thêm thông tin]
     Clarify -->|Không| RAGGuard{RAG Guard}
-    AskMore --> End3([Return])
+    AskMore --> End4([Return])
     
     RAGGuard --> RAGRetrieval{RAG Retrieval}
     RAGRetrieval -->|High confidence| StrongRAG[STRONG RAG: 3-5 docs]
@@ -463,16 +488,21 @@ flowchart TD
     LoadProfile --> BuildHistory[Build Conversation History]
     BuildHistory --> Generate[Generate Response với Gemini]
     Generate --> Save[Lưu vào Firestore]
-    Save --> End4([Return Response])
+    Save --> End5([Return Response])
     
     style Start fill:#90EE90
     style End1 fill:#FFB6C1
     style End2 fill:#FFB6C1
     style End3 fill:#FFB6C1
-    style End4 fill:#90EE90
+    style End4 fill:#FFB6C1
+    style End5 fill:#90EE90
     style Safety fill:#FF6B6B
     style StrongRAG fill:#87CEEB
     style SoftRAG fill:#DDA0DD
+    style Top2Switch fill:#FFEB99
+    style ImmediateSwitch fill:#90EE90
+    style CreatePending fill:#FFB6C1
+    style KeepLast fill:#FFEB99
 ```
 
 ### 5.2. Luồng xử lý nhắc nhở thuốc
