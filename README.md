@@ -132,4 +132,5 @@ Developed as part of an academic project on AI-powered health consultation syste
 This project is for educational and research purposes.
 
 <img width="1391" height="912" alt="image" src="https://github.com/user-attachments/assets/8ef0634d-71af-4c0f-ad47-13e699c0dcbe" />
+<img width="752" height="365" alt="image" src="https://github.com/user-attachments/assets/bfe8531e-5a5a-4bd4-876b-17971ae7e545" />
 
