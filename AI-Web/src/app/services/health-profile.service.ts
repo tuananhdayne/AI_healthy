@@ -152,28 +152,8 @@ export class HealthProfileService {
    * Ưu tiên dùng Gemini để đa dạng, fallback về hardcode nếu lỗi
    */
   async generateExerciseSuggestion(profile: HealthProfile, bmiResult: BMIResult): Promise<ExerciseSuggestion> {
-    // Ưu tiên dùng Gemini để có gợi ý đa dạng
-    try {
-      const aiSuggestion = await this.generateExerciseSuggestionWithAI(profile, bmiResult);
-      if (aiSuggestion && aiSuggestion.exercises && aiSuggestion.exercises.length > 0) {
-        // Validate exercises trước khi trả về
-        const validExercises = aiSuggestion.exercises.filter(ex => ex && typeof ex === 'string' && ex.trim().length > 0);
-        if (validExercises.length > 0) {
-          console.log('✅ Đã tạo gợi ý tập luyện bằng Gemini với', validExercises.length, 'bài tập');
-          return {
-            ...aiSuggestion,
-            exercises: validExercises
-          };
-        }
-      }
-      console.log('⚠️ Gemini không trả về kết quả hợp lệ, dùng fallback');
-    } catch (error) {
-      console.error('❌ Lỗi khi gọi Gemini:', error);
-      console.log('⚠️ Chuyển sang dùng gợi ý mặc định (fallback)');
-    }
-
-    // Fallback về hardcode nếu Gemini lỗi hoặc không trả về kết quả hợp lệ
-    console.log('✅ Sử dụng gợi ý tập luyện mặc định (hardcode)');
+    // Tắt gọi Gemini, luôn dùng gợi ý mặc định để tránh tốn quota/token
+    console.log('ℹ️ Bỏ qua Gemini, dùng gợi ý tập luyện mặc định');
     return this.generateExerciseSuggestionFallback(profile, bmiResult);
   }
 

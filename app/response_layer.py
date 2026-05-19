@@ -1,5 +1,5 @@
 # app/response_layer.py
-
+# file này để xây dựng prompt và các hàm liên quan đến logic tầng phản hồi
 def need_more_info(user_input: str, intent: str):
     """
     Quyết định có cần hỏi thêm triệu chứng không.
@@ -57,7 +57,7 @@ def need_more_info(user_input: str, intent: str):
     return True
 
 
-
+# hàm xây dựng câu hỏi làm rõ triệu chứng
 def build_clarification_question(intent: str):
     """
     Hỏi thêm triệu chứng nếu thông tin chưa đủ rõ.
@@ -83,7 +83,7 @@ def build_clarification_question(intent: str):
 
 import re
 
-
+#hàm này để lấy label tiếng Việt từ mã intent
 def get_intent_label(intent: str) -> str:
     """
     Map intent code sang label tiếng Việt dễ hiểu.
@@ -104,7 +104,7 @@ def get_intent_label(intent: str) -> str:
     }
     return INTENT_LABELS.get(intent, intent)
 
-
+# phân loại intent thành nhóm để quyết định ngưỡng RAG gate
 def get_intent_category(intent: str) -> str:
     """
     Phân loại intent thành: "symptom", "advisory", "no_rag"
@@ -120,7 +120,8 @@ def get_intent_category(intent: str) -> str:
         "bao_dau_bung",
         "bao_sot",
         "bao_ho",
-        "bao_met_moi"
+        "bao_met_moi",
+        "lo_lang_stress"
     }
     
     # Intent tư vấn (ít rủi ro)
@@ -134,7 +135,6 @@ def get_intent_category(intent: str) -> str:
         "other",
         "chao_hoi",
         "unknown",
-        "lo_lang_stress",  # Có thể thêm vào đây nếu cần
         "nhac_nho_uong_thuoc"  # Có thể thêm vào đây nếu cần
     }
     
@@ -148,7 +148,7 @@ def get_intent_category(intent: str) -> str:
         # Default: coi như no_rag để an toàn
         return "no_rag"
 
-
+# hàm lấy ngưỡng RAG gate dựa trên loại intent 
 def get_rag_gate_thresholds(intent_category: str) -> tuple[float, float]:
     """
     Trả về ngưỡng RAG gate dựa trên loại intent.
@@ -164,14 +164,15 @@ def get_rag_gate_thresholds(intent_category: str) -> tuple[float, float]:
         - advisory: (0.75, 0.65) - Ngưỡng thấp hơn vì ít rủi ro
         - no_rag: (1.0, 1.0) - Luôn không dùng RAG
     """
+    #lấy ngưỡng dựa trên loại intent 
     if intent_category == "symptom":
-        return (0.80, 0.70)  # STRONG >= 0.80, SOFT >= 0.70
+        return (0.80, 0.70)  #rag các đoạn >=0.8 là strong, >=0.7 là soft 
     elif intent_category == "advisory":
         return (0.75, 0.65)  # STRONG >= 0.75, SOFT >= 0.65
     else:  # no_rag
         return (1.0, 1.0)  # Luôn không dùng RAG
 
-
+# hàm nhận diện follow-up keywords 
 def is_follow_up(text: str) -> bool:
     """
     Nhận diện follow-up keywords (tiếp diễn, nói tiếp về chủ đề cũ).
@@ -187,7 +188,16 @@ def is_follow_up(text: str) -> bool:
         r'\bkèm\b', r'\bkèm theo\b', r'\bthêm\b',
         r'\bhôm nay\b', r'\bsau đó\b',
         r'\bđỡ hơn\b', r'\bđỡ rồi\b', r'\bnặng hơn\b', r'\btệ hơn\b',
-        r'\btăng lên\b', r'\bgiảm đi\b', r'\bgiảm xuống\b'
+        r'\btăng lên\b', r'\bgiảm đi\b', r'\bgiảm xuống\b',
+        # Follow-up về tập luyện
+        r'\btập xong\b', r'\bsau khi tập\b', r'\bkhi tập\b', r'\bsau tập\b',
+        r'\btập nặng\b', r'\btập nhẹ\b', r'\btập luyện xong\b',
+        r'\bchạy xong\b', r'\bsau khi chạy\b', r'\bkhi chạy\b',
+        # Follow-up về ăn uống
+        r'\bsau khi ăn\b', r'\bkhi ăn\b', r'\bsau ăn\b', r'\băn xong\b',
+        r'\buống xong\b', r'\bsau khi uống\b',
+        # Follow-up chung
+        r'\bsau khi\b', r'\btrước khi\b', r'\bkhi\b.*\bxong\b'
     ]
     
     # Kiểm tra match theo pattern (ranh giới từ)
@@ -197,7 +207,7 @@ def is_follow_up(text: str) -> bool:
     
     return False
 
-
+# hàm nhận diện đổi chủ đề rõ ràng
 def is_topic_shift(text: str) -> bool:
     """
     Nhận diện đổi chủ đề rõ ràng.
@@ -235,7 +245,7 @@ def is_topic_shift(text: str) -> bool:
     
     return False
 
-
+# hàm phân tích câu trả lời xác nhận đổi chủ đề
 def parse_switch_confirm(text: str) -> bool | None:
     """
     Parse câu trả lời xác nhận đổi chủ đề.

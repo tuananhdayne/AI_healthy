@@ -9,8 +9,7 @@ from typing import Optional
 
 # API Key - có thể set qua biến môi trường GEMINI_API_KEY
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "your_api_key_here")
-
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAKYbIEBx6kSifDQTt6o_DmM9MUMH4X4qw")
 
 # Khởi tạo Gemini client
 try:
@@ -71,10 +70,10 @@ def generate_answer(prompt: str, system_instruction: Optional[str] = None) -> st
         
         # Tạo generation config để tối ưu cho chatbot y tế - chất lượng cao nhất
         generation_config = genai.types.GenerationConfig(
-            temperature=0.7,  # Giảm xuống để chính xác và nhất quán hơn (0.7 = cân bằng tốt)
-            top_p=0.9,        # Tập trung vào các tokens có xác suất cao hơn
-            top_k=40,         # Chọn từ top K tokens
-            max_output_tokens=2048,  # Tăng lên để trả lời chi tiết và đầy đủ hơn
+            temperature=0.7,  # Giảm xuống để chính xác và nhất quán hơn (0.7 = cân bằng tốt) ít nói linh tinh
+            top_p=0.9,        # Tập trung vào các tokens có xác suất cao hơn  độ an toàn khi chọn từ
+            top_k=40,         # Chọn từ top K tokens  40 từ có xác suất cao nhất
+            max_output_tokens=2048 ,  #  số từ , dấu tối đa trong câu trả lời
         )
         
         # Nếu có system instruction, thêm vào prompt
@@ -127,9 +126,9 @@ def generate_answer(prompt: str, system_instruction: Optional[str] = None) -> st
         else:
             return f"⚠️ Lỗi khi xử lý: {error_msg[:100]}"
 
-
+# hàm tạo câu trả lời y tế với prompt tinh chỉnh
 def generate_medical_answer(
-    context: str, 
+    context: str,  
     user_question: str, 
     intent: Optional[str] = None,
     conversation_history: Optional[str] = None,
@@ -274,7 +273,7 @@ QUY TẮC QUAN TRỌNG:
         prompt_parts.append("=" * 60)
         prompt_parts.append("")
     
-    # Thêm hướng dẫn trả lời (giống GPT - tự nhiên, chi tiết, TUYỆT ĐỐI không gán RAG cho user)
+    # Thêm hướng dẫn trả lời (tự nhiên, chi tiết, TUYỆT ĐỐI không gán RAG cho user)
     if use_rag_priority:
         prompt_parts.append("""Hãy trả lời một cách TỰ NHIÊN, CHÍNH XÁC và CHI TIẾT (Chất lượng cao):
 
@@ -285,7 +284,7 @@ QUY TẮC QUAN TRỌNG:
    - Ví dụ: Nếu người dùng nói "tôi đau ở rốn" → Chỉ nói về đau ở rốn, KHÔNG thêm đầy hơi, chướng bụng, ăn cay...
 
 2. RAG KNOWLEDGE - Dùng để GIẢI THÍCH, KHÔNG GÁN:
-   - Sử dụng kiến thức y tế tham khảo để giải thích các khả năng, nguyên nhân thường gặp
+   - Sử dụng kiến thức y tế tham khảo thêm nếu kiến thức được cung cấp phù hợp với câu hỏi hoặc triệu chứng của người dùng 
    - Dùng ngôn ngữ chung: "Đau bụng ở vùng rốn thường có thể liên quan đến...", "Một số nguyên nhân thường gặp bao gồm..."
    - TUYỆT ĐỐI KHÔNG nói: "Dựa trên những triệu chứng bạn đã chia sẻ như..." khi triệu chứng đó KHÔNG có trong user input
    - TUYỆT ĐỐI KHÔNG nói: "Có thể thấy bạn đang gặp..." về triệu chứng mà user chưa nói
@@ -327,10 +326,10 @@ Trả lời:""")
 Trả lời:""")
     
     prompt = "\n".join(prompt_parts)
-    
+    # dùng prompt để gọi Gemini trả về câu trả lời
     return generate_answer(prompt, system_instruction=system_instruction)
 
-
+# Hàm tạo câu trả lời chào hỏi tự nhiên
 def generate_greeting(user_greeting: str) -> str:
     """
     Tạo câu trả lời chào hỏi tự nhiên

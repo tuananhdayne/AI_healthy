@@ -35,8 +35,9 @@ def initialize_firestore():
                     if os.path.exists(path):
                         service_account_path = path
                         break
-            
+
             if service_account_path and os.path.exists(service_account_path):
+                print(f"[firestore] Using service account: {service_account_path}")
                 try:
                     cred = credentials.Certificate(service_account_path)
                     firebase_admin.initialize_app(cred, {
@@ -58,6 +59,7 @@ def initialize_firestore():
                     else:
                         raise
             else:
+                print("[firestore] No service account file found, trying default credentials")
                 # Sử dụng default credentials với project ID cụ thể
                 try:
                     firebase_admin.initialize_app(options={
@@ -93,9 +95,11 @@ def initialize_firestore():
                             raise
         
         _db = firestore.client()
+        print(f"[firestore] Client initialized. Project: {_db.project}")
         return _db
         
-    except Exception:
+    except Exception as e:
+        print(f"[firestore] Failed to initialize: {e}")
         # Frontend đã lưu trực tiếp, backend không cần Firestore
         return None
 
@@ -196,6 +200,83 @@ def save_chat_session(
         
     except Exception:
         return None
+
+
+def load_chat_history(user_id: Optional[str], session_id: str, limit: int = 2) -> List[tuple]:
+    """Đọc lịch sử chat (user/assistant) từ Firestore và trả về các cặp (user, bot).
+
+    - Lọc theo sessionId (và userId nếu có)
+    - Sắp xếp theo timestamp tăng dần
+    - Ghép cặp theo role: ưu tiên user → assistant; nếu thiếu user thì vẫn giữ assistant
+    - Trả về tối đa `limit` cặp gần nhất
+    """
+    try:
+        db = get_db()
+        if db is None:
+            print("[firestore] No DB client. Cannot load history.")
+            return []
+
+        messages_ref = db.collection("messages")
+        # Bắt buộc theo sessionId; userId là tùy chọn để tăng chính xác nếu front gửi kèm
+        query_obj = messages_ref.where("sessionId", "==", session_id)
+        if user_id:
+            query_obj = query_obj.where("userId", "==", user_id)
+
+        # Không order_by trên Firestore (giống frontend): lấy tất cả, sau đó sort trong Python
+        docs = list(query_obj.stream())
+        print(f"[firestore] Loaded {len(docs)} raw docs for session={session_id} user_id={user_id}")
+        if docs:
+            sample = []
+            for d in docs[:5]:
+                data = d.to_dict() or {}
+                sample.append({
+                    "role": data.get("role"),
+                    "text": (data.get("text") or "")[:60],
+                    "aiResponse": (data.get("aiResponse") or "")[:60],
+                    "timestamp": str(data.get("timestamp")),
+                })
+            print(f"[firestore] Sample docs: {sample}")
+        history: List[tuple] = []
+        pending_users: List[str] = []
+
+        # Sort docs giống frontend: theo timestamp tăng dần (nếu thiếu timestamp thì giữ nguyên thứ tự Firestore)
+        def _get_ts(doc):
+            data = doc.to_dict() or {}
+            ts = data.get("timestamp")
+            try:
+                return ts.to_datetime() if hasattr(ts, "to_datetime") else ts
+            except Exception:
+                return ts
+
+        docs = sorted(docs, key=lambda d: (_get_ts(d) or 0))
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+            role = data.get("role")
+            # Suy luận role nếu thiếu giống frontend: nếu có aiResponse thì assistant, ngược lại user
+            if not role:
+                role = "assistant" if data.get("aiResponse") else "user"
+
+            # Frontend lưu aiResponse cho assistant, text cho user; ưu tiên text rồi aiResponse
+            text = data.get("text") or data.get("aiResponse")
+            if not text:
+                continue
+
+            if role == "user":
+                pending_users.append(text)
+            elif role == "assistant":
+                user_text = pending_users.pop(0) if pending_users else None
+                history.append((user_text, text))
+            else:
+                continue
+
+        # chỉ giữ tối đa `limit` cặp gần nhất
+        if len(history) > limit:
+              history = history[-limit:]
+        return history
+
+    except Exception:
+        return []
 
 
 # ============================

@@ -5,10 +5,13 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  Auth,
-  UserCredential,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  updateProfile,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { firebaseAuth } from '../../environments/firebase.config';
 import { FirebaseService } from './firebase.service';
@@ -17,13 +20,14 @@ import { ThemeService } from './theme.service';
 export interface User {
   id: string;
   email: string;
-  fullName: string;
+  fullName: string | null;
   username: string;
   role: 'user' | 'admin'; // 'user' or 'admin'
   token?: string;
 }
 
 export interface UserCredentials {
+  fullName?: string;
   id?: string;
   uid: string;
   username: string;
@@ -32,6 +36,8 @@ export interface UserCredentials {
   role?: 'user' | 'admin';
   createdAt?: any;
   updatedAt?: any;
+  phone?: string;
+  pinCode?: string;
 }
 
 @Injectable({
@@ -61,16 +67,16 @@ export class AuthService {
     // Listen to Firebase auth state changes (cho Google login)
     onAuthStateChanged(firebaseAuth, (firebaseUser) => {
       if (firebaseUser) {
-        // Nếu đã có user từ localStorage (username/password) thì không ghi đè
-        if (!this.currentUserSubject.value) {
-          const user: User = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            username: firebaseUser.displayName || '',
-            role: 'user',
-            token: firebaseUser.refreshToken || ''
-          };
+        // Nếu Firebase logged-in user khác với current stored user thì cập nhật lại
+        const user: User = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          username: firebaseUser.displayName || '',
+          role: 'user',
+          token: firebaseUser.refreshToken || ''
+        };
+        if (!this.currentUserSubject.value || this.currentUserSubject.value.id !== firebaseUser.uid) {
           this.setCurrentUser(user);
         }
       } else {
@@ -145,6 +151,19 @@ export class AuthService {
   }
 
   /**
+   * ✅ Kiểm tra email đã tồn tại trong Firebase Authentication chưa
+   */
+  async checkEmailExists(email: string): Promise<boolean> {
+    try {
+      const methods = await fetchSignInMethodsForEmail(firebaseAuth, email);
+      return methods.length > 0;
+    } catch (error) {
+      console.error('Lỗi kiểm tra email:', error);
+      return false;
+    }
+  }
+
+  /**
    * Kiểm tra tên tài khoản đã tồn tại trong Firestore
    */
   async checkUsernameExists(username: string): Promise<boolean> {
@@ -163,59 +182,186 @@ export class AuthService {
    */
   async loginWithUsername(username: string, password: string): Promise<User | null> {
     try {
-      // Lấy credentials từ Firestore
+      // Lấy credentials từ Firestore để tìm email tương ứng với username
       const credentials = await this.getUserCredentialsByUsername(username);
-      
-      if (!credentials) {
+      if (!credentials || !credentials.email) {
         throw new Error('Tài khoản không tồn tại');
       }
 
-      // Kiểm tra mật khẩu
-      const decryptedPassword = this.decryptPassword(credentials.passwordHash);
-      if (decryptedPassword !== password) {
-        throw new Error('Mật khẩu không chính xác');
-      }
+      // Dùng Firebase Auth để đăng nhập bằng email + password
+      const credential = await signInWithEmailAndPassword(firebaseAuth, credentials.email, password);
+      const firebaseUser = credential.user;
 
-      // Tạo user object
       const user: User = {
-        id: credentials.uid,
-        email: credentials.email,
-        fullName: credentials.email.split('@')[0],
+        id: firebaseUser.uid,
+        email: firebaseUser.email || credentials.email,
+        fullName: firebaseUser.displayName || credentials.fullName || (credentials.email || '').split('@')[0],
         username: credentials.username,
         role: credentials.role === 'admin' ? 'admin' : 'user',
-        token: ''
+        token: firebaseUser.refreshToken || ''
       };
       this.setCurrentUser(user);
+
+      // Ensure userCredentials exists and is synced
+      try {
+        const existing = await this.firebaseService.getUserCredentialsByUid(firebaseUser.uid);
+        if (!existing) {
+          await this.firebaseService.createUserCredentials({
+            uid: firebaseUser.uid,
+            username: credentials.username,
+            email: firebaseUser.email || credentials.email,
+            passwordHash: '',
+            role: user.role
+          } as any);
+        }
+      } catch (err) {
+        console.warn('Không thể đồng bộ userCredentials sau login:', err);
+      }
+
       return user;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
       return null;
     }
   }
 
   /**
-   * Simulate login (for demo purposes).
-   * In a real app, call your backend API here.
+   * Đăng nhập cơ bản bằng email và password qua Firebase
    */
-  login(email: string, password: string, role: 'user' | 'admin' = 'user'): Observable<User> {
-    return from(
-      signInWithEmailAndPassword(firebaseAuth, email, password).then((credential) => {
-        const user: User = {
-          id: credential.user.uid,
-          email: credential.user.email || '',
-          fullName: credential.user.displayName || email.split('@')[0],
-          username: credential.user.displayName || '',
-          role,
-          token: credential.user.refreshToken || ''
-        };
-        this.setCurrentUser(user);
-        return user;
-      })
-    );
+  async loginSimpleEmail(email: string, password: string, role: 'user' | 'admin' = 'user'): Promise<User | null> {
+    try {
+      const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      const user: User = {
+        id: credential.user.uid,
+        email: credential.user.email || '',
+        fullName: credential.user.displayName || email.split('@')[0],
+        username: credential.user.displayName || '',
+        role,
+        token: credential.user.refreshToken || ''
+      };
+      this.setCurrentUser(user);
+      
+      // Đảm bảo có document trong userCredentials để admin đọc được
+      try {
+        const existing = await this.firebaseService.getUserCredentialsByUid(credential.user.uid);
+        if (!existing) {
+          await this.firebaseService.createUserCredentials({
+            uid: credential.user.uid,
+            username: credential.user.displayName || email.split('@')[0],
+            email: credential.user.email || email,
+            passwordHash: '',
+            role
+          } as any);
+        }
+      } catch (err) {
+        console.warn('Không thể đồng bộ userCredentials sau login:', err);
+      }
+      return user;
+    } catch (error: any) {
+      console.error('Login error:', error);
+      return null;
+    }
   }
 
   /**
-   * Đăng ký tài khoản mới với username, email, password mã hóa
+   * Hàm login cũ (Observable) - giữ lại để backward compatible
+   */
+  login(email: string, password: string, role: 'user' | 'admin' = 'user'): Observable<User> {
+    return from(this.loginSimpleEmail(email, password, role).then(user => {
+      if (!user) throw new Error('Login failed');
+      return user;
+    }));
+  }
+
+  /**
+   * ✅ Đăng ký tài khoản mới với email, password qua Firebase (không cần username)
+   */
+  async registerSimpleEmail(email: string, password: string, fullName: string): Promise<User | null> {
+    try {
+      // ✅ Kiểm tra email đã tồn tại chưa
+      const emailExists = await this.checkEmailExists(email);
+      if (emailExists) {
+        console.error('Email này đã được đăng ký rồi:', email);
+        throw new Error('Email này đã được đăng ký. Vui lòng dùng email khác hoặc đăng nhập.');
+      }
+
+      // ✅ Kiểm tra password độ dài tối thiểu
+      if (password.length < 6) {
+        throw new Error('Mật khẩu phải có ít nhất 6 ký tự.');
+      }
+
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      const firebaseUser = credential.user;
+      
+      // Set display name in Firebase profile
+      try {
+        await updateProfile(firebaseUser, { displayName: fullName || '' });
+      } catch (err) {
+        console.warn('Không thể set displayName cho user mới:', err);
+      }
+
+      // Tạo userCredentials trong Firestore
+      try {
+        await this.firebaseService.createUserCredentials({
+          uid: firebaseUser.uid,
+          username: fullName || email.split('@')[0],
+          email: firebaseUser.email || email,
+          passwordHash: this.encryptPassword(password),
+          role: 'user',
+          fullName: fullName || undefined,
+          phone: '',
+          pinCode: ''
+        } as any);
+      } catch (err) {
+        console.error('Lỗi tạo userCredentials sau register:', err);
+        // Xóa user Firebase nếu không tạo được Firestore doc
+        try {
+          await firebaseUser.delete();
+        } catch (deleteErr) {
+          console.warn('Không thể xóa Firebase user:', deleteErr);
+        }
+        throw new Error('Không thể tạo hồ sơ người dùng. Vui lòng thử lại.');
+      }
+
+      const user: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || email,
+        fullName: fullName || email.split('@')[0],
+        username: fullName || email.split('@')[0],
+        role: 'user',
+        token: firebaseUser.refreshToken || ''
+      };
+      this.setCurrentUser(user);
+      console.log('✅ Đăng ký thành công:', user);
+      return user;
+    } catch (error: any) {
+      console.error('Register error:', error);
+      
+      // ✅ Xử lý các lỗi Firebase cụ thể
+      if (error.code === 'auth/email-already-in-use') {
+        console.error('Email đã được đăng ký.');
+      } else if (error.code === 'auth/weak-password') {
+        console.error('Mật khẩu quá yếu (phải ≥ 6 ký tự).');
+      } else if (error.code === 'auth/invalid-email') {
+        console.error('Email không hợp lệ.');
+      }
+      
+      return null;
+    }
+  }
+
+  /**
+   * Hàm register cũ (Observable) - giữ lại để backward compatible
+   */
+  register(email: string, password: string, fullName: string): Observable<User> {
+    return from(this.registerSimpleEmail(email, password, fullName).then(user => {
+      if (!user) throw new Error('Register failed');
+      return user;
+    }));
+  }
+
+  /**
+   * Đăng ký tài khoản mới với username, email, password qua Firebase
    */
   async registerWithUsername(
     username: string, 
@@ -224,67 +370,182 @@ export class AuthService {
     additionalInfo?: { fullName?: string; phone?: string; pinCode?: string }
   ): Promise<User | null> {
     try {
+      // ✅ Kiểm tra email đã tồn tại chưa
+      const emailExists = await this.checkEmailExists(email);
+      if (emailExists) {
+        throw new Error('Email này đã được đăng ký. Vui lòng dùng email khác.');
+      }
+
       // Kiểm tra tên tài khoản đã tồn tại
       const usernameExists = await this.checkUsernameExists(username);
       if (usernameExists) {
         throw new Error('Tên tài khoản đã tồn tại. Vui lòng chọn tên khác.');
       }
-
-      // Tạo document credentials mã hóa trong Firestore
-      const passwordHash = this.encryptPassword(password);
-      const uid = 'user_' + Date.now(); // Tạo ID duy nhất
-
+      
       // Lấy thông tin từ additionalInfo
       const fullName = additionalInfo?.fullName || email.split('@')[0];
       const phone = additionalInfo?.phone || '';
       const pinCode = additionalInfo?.pinCode || '';
+      
+      // Tạo user trong Firebase Authentication
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      const firebaseUser = credential.user;
+      
+      // Set display name in Firebase profile
+      try {
+        await updateProfile(firebaseUser, { displayName: fullName || username });
+      } catch (err) {
+        console.warn('Không thể set displayName cho user mới:', err);
+      }
 
-      await this.firebaseService.createUserCredentials({
-        uid,
-        username,
-        email,
-        passwordHash,
-        role: 'user', // Mặc định là user
-        pinCode: pinCode || undefined,
-        fullName: fullName || undefined,
-        phone: phone || undefined
-      });
+      // Tạo hoặc đồng bộ userCredentials trong Firestore (không lưu mật khẩu plaintext)
+      try {
+        await this.firebaseService.createUserCredentials({
+          uid: firebaseUser.uid,
+          username,
+          email: firebaseUser.email || email,
+          passwordHash: this.encryptPassword(password),
+          role: 'user',
+          pinCode: pinCode || undefined,
+          fullName: fullName || undefined,
+          phone: phone || undefined
+        } as any);
+      } catch (err) {
+        console.error('Lỗi tạo userCredentials sau register:', err);
+        // Xóa user Firebase nếu không tạo được Firestore doc
+        try {
+          await firebaseUser.delete();
+        } catch (deleteErr) {
+          console.warn('Không thể xóa Firebase user:', deleteErr);
+        }
+        throw err;
+      }
 
-      // Tạo user object
+      // Tạo user object và set current user
       const user: User = {
-        id: uid,
-        email,
+        id: firebaseUser.uid,
+        email: firebaseUser.email || email,
         fullName: fullName,
         username,
         role: 'user',
-        token: ''
+        token: firebaseUser.refreshToken || ''
       };
       this.setCurrentUser(user);
       return user;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Register error:', error);
       return null;
     }
   }
 
   /**
-   * Register a new user with Firebase Authentication.
+   * Simple signup using Firebase Auth (email/password).
+   * Creates a Firestore `userCredentials` document if missing.
    */
-  register(email: string, password: string, fullName: string): Observable<User> {
-    return from(
-      createUserWithEmailAndPassword(firebaseAuth, email, password).then((credential) => {
-        const user: User = {
-          id: credential.user.uid,
-          email: credential.user.email || '',
-          fullName: fullName || email.split('@')[0],
-          username: '',
+  async signUpSimple(email: string, password: string, fullName?: string): Promise<User | null> {
+    try {
+      // ✅ Kiểm tra email đã tồn tại chưa
+      const emailExists = await this.checkEmailExists(email);
+      if (emailExists) {
+        throw new Error('Email này đã được đăng ký.');
+      }
+
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      const firebaseUser = credential.user;
+
+      // Set display name
+      try {
+        await updateProfile(firebaseUser, { displayName: fullName || '' });
+      } catch (err) {
+        console.warn('Could not set displayName after signup:', err);
+      }
+
+      const name = fullName || firebaseUser.displayName || email.split('@')[0];
+
+      try {
+        await this.firebaseService.createUserCredentials({
+          uid: firebaseUser.uid,
+          username: name,
+          email: firebaseUser.email || email,
+          passwordHash: this.encryptPassword(password),
           role: 'user',
-          token: credential.user.refreshToken || ''
-        };
-        this.setCurrentUser(user);
-        return user;
-      })
-    );
+          fullName: name
+        } as any);
+      } catch (err) {
+        console.warn('Could not create userCredentials after signup:', err);
+        // Xóa user Firebase nếu không tạo được Firestore doc
+        try {
+          await firebaseUser.delete();
+        } catch (deleteErr) {
+          console.warn('Không thể xóa Firebase user:', deleteErr);
+        }
+      }
+
+      const user: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || email,
+        fullName: name,
+        username: name,
+        role: 'user',
+        token: firebaseUser.refreshToken || ''
+      };
+      this.setCurrentUser(user);
+      return user;
+    } catch (error: any) {
+      console.error('Simple signup error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Simple signin using Firebase Auth (email/password).
+   * Syncs `userCredentials` if missing and returns the `User`.
+   */
+  async signInSimple(email: string, password: string): Promise<User | null> {
+    try {
+      const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      const firebaseUser = credential.user;
+
+      // Try to find credentials by uid
+      let creds = await this.firebaseService.getUserCredentialsByUid(firebaseUser.uid);
+      // Fallback: try to find by email
+      if (!creds) {
+        creds = await this.firebaseService.getUserCredentialsByEmail(firebaseUser.email || email);
+      }
+
+      const username = creds?.username || firebaseUser.displayName || '';
+      const fullName = firebaseUser.displayName || creds?.fullName || (firebaseUser.email || email).split('@')[0];
+      const role: 'user' | 'admin' = creds && creds.role === 'admin' ? 'admin' : 'user';
+
+      // Ensure credentials exist for admin UI
+      if (!creds) {
+        try {
+          await this.firebaseService.createUserCredentials({
+            uid: firebaseUser.uid,
+            username,
+            email: firebaseUser.email || email,
+            passwordHash: '',
+            role
+          } as any);
+        } catch (err) {
+          console.warn('Could not create userCredentials after signin:', err);
+        }
+      }
+
+      const user: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || email,
+        fullName,
+        username,
+        role,
+        token: firebaseUser.refreshToken || ''
+      };
+      this.setCurrentUser(user);
+      return user;
+    } catch (error: any) {
+      console.error('Simple signin error:', error);
+      return null;
+    }
   }
 
   /**
@@ -324,8 +585,8 @@ export class AuthService {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(firebaseAuth, provider);
       const firebaseUser = result.user;
-      // Lấy user từ Firestore bằng email
-      let userCredentials = await this.firebaseService.getUserCredentialsByEmail(firebaseUser.email || '');
+      // Lấy user credentials từ Firestore bằng uid (an toàn với security rules)
+      let userCredentials = await this.firebaseService.getUserCredentialsByUid(firebaseUser.uid);
       let role: 'user' | 'admin' = 'user';
       if (userCredentials && userCredentials.role === 'admin') {
         role = 'admin';
@@ -350,7 +611,12 @@ export class AuthService {
         } as any);
       }
       return user;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle common user-cancelled popup error gracefully
+      if (error && (error.code === 'auth/popup-closed-by-user' || error.message?.includes('popup closed by the user'))) {
+        console.info('User closed Google login popup.');
+        return null;
+      }
       console.error('Google login error:', error);
       return null;
     }
@@ -361,7 +627,28 @@ export class AuthService {
    */
   async changePassword(username: string, oldPassword: string, newPassword: string): Promise<boolean> {
     try {
-      // Lấy credentials từ Firestore
+      // First try to update password via Firebase Auth for the currently signed-in user
+      const currentUser = firebaseAuth.currentUser;
+      if (currentUser && currentUser.email) {
+        // If oldPassword provided, reauthenticate
+        if (oldPassword) {
+          const cred = EmailAuthProvider.credential(currentUser.email, oldPassword);
+          await reauthenticateWithCredential(currentUser, cred);
+        }
+        // Update password in Firebase Auth
+        await updatePassword(currentUser, newPassword);
+
+        // Also update Firestore passwordHash for legacy username flows (store base64)
+        try {
+          const newHash = this.encryptPassword(newPassword);
+          await this.firebaseService.updateUserPassword(username, newHash);
+        } catch (err) {
+          console.warn('Could not update Firestore passwordHash after changing Auth password:', err);
+        }
+        return true;
+      }
+
+      // Fallback: legacy username/password stored in Firestore
       const credentials = await this.getUserCredentialsByUsername(username);
       if (!credentials) {
         throw new Error('Không tìm thấy tài khoản');
@@ -375,9 +662,8 @@ export class AuthService {
         }
       }
 
-      // Mã hóa mật khẩu mới
+      // Mã hóa mật khẩu mới và cập nhật Firestore
       const newPasswordHash = this.encryptPassword(newPassword);
-      // Cập nhật mật khẩu trong Firestore
       await this.firebaseService.updateUserPassword(username, newPasswordHash);
       return true;
     } catch (error) {

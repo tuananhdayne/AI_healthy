@@ -1,0 +1,35 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# VSCode
+.vscode/
+
+# Node
+node_modules/
+
+# Build
+dist/
+build/
+
+# Firebase
+.firebase/
+
+# Secrets
+serviceAccountKey.json
+
+# Models and large artifacts
+embeddings/
+model/
+*.safetensors
+*.pt
+*.bin
+*.faiss
