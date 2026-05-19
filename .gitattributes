@@ -1,1 +1,2 @@
+model/intent_model/*.safetensors filter=lfs diff=lfs merge=lfs -text
 model/intent_model/model.safetensors filter=lfs diff=lfs merge=lfs -text
