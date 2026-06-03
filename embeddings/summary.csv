@@ -1,9 +1,0 @@
-intent,file,raw,final,dup_removed,avg_chars,max_chars,built
-bao_dau_bung,bao_dau_bung.txt,95,94,1,87.9,131,YES
-bao_dau_dau,bao_dau_dau.txt,158,158,0,94.2,231,YES
-bao_ho,bao_ho.txt,101,101,0,76.4,120,YES
-bao_met_moi,bao_met_moi.txt,105,102,3,84.1,130,YES
-bao_sot,bao_sot.txt,107,104,3,73.9,127,YES
-lo_lang_stress,lo_lang_stress.txt,103,100,3,98.2,148,YES
-tu_van_dinh_duong,tu_van_dinh_duong.txt,150,149,1,93.8,204,YES
-tu_van_tap_luyen,tu_van_tap_luyen.txt,138,138,0,126.0,185,YES

@@ -19,12 +19,22 @@ node_modules/
 # Build
 dist/
 build/
+.angular/
+.angular/cache/
+*.log
+firebase-debug.log
 
 # Firebase
 .firebase/
+*.firebase-debug.log
 
 # Secrets
 serviceAccountKey.json
+service-account*.json
+*serviceAccount*.json
+credentials*.json
+*.pem
+*.key
 
 # Models and large artifacts
 embeddings/
