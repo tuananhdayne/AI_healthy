@@ -76,7 +76,7 @@ export GEMINI_API_KEY=your_api_key_here
 pip install google-generativeai
 ```
 
-### Lỗi: "ModuleNotFoundError: No module named 'dotenv'"
+### Lỗi: "ModuleNotFoundError: No module named 'dotenv'" (chưa cài `python-dotenv`)
 ```bash
 pip install python-dotenv
 ```

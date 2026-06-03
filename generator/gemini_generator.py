@@ -10,9 +10,14 @@ from typing import Optional
 # Hỗ trợ đọc .env nếu đã cài python-dotenv
 try:
     from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
+except ImportError:
+    load_dotenv = None
+
+if load_dotenv:
+    try:
+        load_dotenv()
+    except Exception as e:
+        print(f"⚠️ Không thể load file .env: {e}. Hệ thống sẽ tiếp tục dùng biến môi trường của OS.")
 
 # Model sẽ được load lazy trong _get_model()
 _gemini_model = None
@@ -21,8 +26,12 @@ _client_configured = False
 
 
 def _get_api_key() -> str:
-    """Lấy API key từ biến môi trường (ưu tiên GEMINI_API_KEY)."""
-    return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+    """Lấy API key từ biến môi trường theo thứ tự: GEMINI_API_KEY -> GOOGLE_API_KEY."""
+    for key_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        key_value = os.environ.get(key_name)
+        if key_value and key_value.strip():
+            return key_value.strip()
+    return ""
 
 
 def _ensure_client_configured():
