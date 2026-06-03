@@ -9,6 +9,7 @@ env/
 
 # Environment variables
 .env
+.env.local
 
 # VSCode
 .vscode/
@@ -25,6 +26,7 @@ build/
 
 # Secrets
 serviceAccountKey.json
+*.key
 
 # Models and large artifacts
 embeddings/

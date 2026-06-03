@@ -1,11 +1,11 @@
 # 🚀 Cài đặt Gemini API
 
-## ✅ Đã cấu hình sẵn
+## 🔐 Cấu hình bảo mật (bắt buộc)
 
-API key đã được cấu hình trong `generator/gemini_generator.py`:
-```
-AIzaSyCyAyS2hv9mJRkofPNi7p5SWycMR6xFuME
-```
+API key **không được hardcode trong code**. Dự án đọc key từ biến môi trường:
+
+- `GEMINI_API_KEY` (ưu tiên)
+- `GOOGLE_API_KEY` (fallback an toàn)
 
 ## 📦 Cài đặt thư viện
 
@@ -16,12 +16,25 @@ pip install -r requirements.txt
 
 ### Cách 2: Cài thủ công
 ```bash
-pip install google-generativeai
+pip install google-generativeai python-dotenv
 ```
 
-## 🔧 Cấu hình API Key (Tùy chọn)
+## 🔧 Cấu hình API Key
 
-Nếu muốn dùng API key khác hoặc bảo mật hơn, set biến môi trường:
+### Cách 1: Tạo file `.env` (khuyến nghị cho local)
+
+Copy từ file mẫu:
+```bash
+cp .env.example .env
+```
+
+Sau đó cập nhật:
+```env
+GEMINI_API_KEY=your_real_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+### Cách 2: Set biến môi trường trực tiếp
 
 **Windows:**
 ```bash
@@ -31,11 +44,6 @@ set GEMINI_API_KEY=your_api_key_here
 **Linux/Mac:**
 ```bash
 export GEMINI_API_KEY=your_api_key_here
-```
-
-Hoặc tạo file `.env`:
-```
-GEMINI_API_KEY=your_api_key_here
 ```
 
 ## ⚡ Lợi ích của Gemini API
@@ -59,7 +67,7 @@ GEMINI_API_KEY=your_api_key_here
 
 - Gemini API có quota miễn phí (đủ cho development)
 - Nếu vượt quota, có thể nâng cấp hoặc quay lại Gemma local
-- API key đã được hardcode trong code (có thể cải thiện bằng .env)
+- Không commit file `.env`, file key hoặc API key thực lên Git
 
 ## 🆘 Xử lý lỗi
 
@@ -68,11 +76,15 @@ GEMINI_API_KEY=your_api_key_here
 pip install google-generativeai
 ```
 
+### Lỗi: "ModuleNotFoundError: No module named 'dotenv'" (chưa cài `python-dotenv`)
+```bash
+pip install python-dotenv
+```
+
 ### Lỗi: "API key invalid"
-- Kiểm tra API key trong `generator/gemini_generator.py`
-- Hoặc set biến môi trường `GEMINI_API_KEY`
+- Kiểm tra `GEMINI_API_KEY` trong `.env` hoặc biến môi trường
+- Đảm bảo key còn hiệu lực trong Google AI Studio / Google Cloud
 
 ### Lỗi: "Quota exceeded"
 - Đã vượt quota miễn phí
 - Đợi reset quota hoặc nâng cấp tài khoản
-
