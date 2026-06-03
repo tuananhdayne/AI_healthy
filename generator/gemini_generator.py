@@ -7,19 +7,38 @@ import os
 import google.generativeai as genai
 from typing import Optional
 
-# API Key - có thể set qua biến môi trường GEMINI_API_KEY
-
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAKYbIEBx6kSifDQTt6o_DmM9MUMH4X4qw")
-
-# Khởi tạo Gemini client
+# Hỗ trợ đọc .env nếu đã cài python-dotenv
 try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    # Model sẽ được load lazy trong _get_model()
-    _gemini_model = None
-    _model_initialized = False
-except Exception as e:
-    print(f"⚠️ Lỗi khi cấu hình Gemini API: {e}")
-    _model_initialized = False
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
+# Model sẽ được load lazy trong _get_model()
+_gemini_model = None
+_model_initialized = False
+_client_configured = False
+
+
+def _get_api_key() -> str:
+    """Lấy API key từ biến môi trường (ưu tiên GEMINI_API_KEY)."""
+    return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+
+
+def _ensure_client_configured():
+    """Cấu hình Gemini client một cách an toàn."""
+    global _client_configured
+    if _client_configured:
+        return
+
+    api_key = _get_api_key()
+    if not api_key:
+        raise ValueError(
+            "Thiếu API key Gemini. Vui lòng set GEMINI_API_KEY (hoặc GOOGLE_API_KEY) trong biến môi trường/.env."
+        )
+
+    genai.configure(api_key=api_key)
+    _client_configured = True
 
 
 def _get_model():
@@ -30,6 +49,7 @@ def _get_model():
         return _gemini_model
     
     try:
+        _ensure_client_configured()
         # Sử dụng gemini-2.0-flash (nhanh, quota tốt: 15 RPM, 1M TPM)
         # Có thể đổi sang:
         # - gemini-2.5-pro: Chất lượng cao nhất nhưng chậm hơn (2 RPM, 125K TPM)
@@ -344,4 +364,3 @@ Trả lời:"""
     system_instruction = "Bạn là trợ lý y tế thân thiện, chuyên nghiệp. Trả lời ngắn gọn, tự nhiên."
     
     return generate_answer(prompt, system_instruction=system_instruction)
-
