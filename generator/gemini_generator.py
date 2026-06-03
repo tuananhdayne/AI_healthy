@@ -5,14 +5,19 @@ Nhanh hơn và không cần load model nặng
 
 import os
 import google.generativeai as genai
+from dotenv import load_dotenv
 from typing import Optional
 
 # API Key - có thể set qua biến môi trường GEMINI_API_KEY
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAKYbIEBx6kSifDQTt6o_DmM9MUMH4X4qw")
+load_dotenv()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # Khởi tạo Gemini client
 try:
+    if not GEMINI_API_KEY:
+        raise ValueError("Missing GEMINI_API_KEY environment variable")
+
     genai.configure(api_key=GEMINI_API_KEY)
     # Model sẽ được load lazy trong _get_model()
     _gemini_model = None
